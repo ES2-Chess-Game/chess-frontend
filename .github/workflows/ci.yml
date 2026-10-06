@@ -1,0 +1,42 @@
+name: ci
+
+on:
+  pull_request:
+    branches: [prd, hml]
+  push:
+    branches: [prd, hml]
+
+jobs:
+  gitflow:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - name: Valida branch de DEV
+        env:
+          HEAD_REF: ${{ github.head_ref }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          BASE_REF: ${{ github.base_ref }}
+        run: |
+          if [[ ! "$HEAD_REF" =~ ^(feature|fix|hotfix|docs|chore|refactor|test)/[a-z0-9._-]+$ ]]; then
+            echo "::error::Branch $HEAD_REF fora do padrao <tipo>/<descricao>. PRs para prd/hml saem de uma branch de DEV criada a partir de prd."
+            exit 1
+          fi
+          if [[ "$BASE_REF" == "prd" ]] && [[ -n "$(comm -12 <(git rev-list --merges origin/prd..origin/hml | sort) <(git rev-list origin/prd.."$HEAD_SHA" | sort))" ]]; then
+            echo "::error::A branch contem commits de hml. Recrie a branch a partir de prd sem mergear hml nela."
+            exit 1
+          fi
+
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npm run lint
+      - run: npm run build
