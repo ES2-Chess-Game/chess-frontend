@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import Header from '../components/header'
+import Header from '../components/Header'
 
 type Color = 'BRANCA' | 'PRETA'
 type PieceType = 'PEAO' | 'TORRE' | 'CAVALO' | 'BISPO' | 'RAINHA' | 'REI'
