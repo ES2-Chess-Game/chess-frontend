@@ -5,6 +5,7 @@ import Header from '../components/Header'
 type Color = 'BRANCA' | 'PRETA'
 type PieceType = 'PEAO' | 'TORRE' | 'CAVALO' | 'BISPO' | 'RAINHA' | 'REI'
 type GameStatus = 'EM_ANDAMENTO' | 'XEQUE' | 'XEQUE_MATE' | 'EMPATE'
+type AiDifficulty = 'EASY' | 'MEDIUM' | 'ADVANCED'
 type Piece = { tipo: PieceType; cor: Color }
 type Board = (Piece | null)[][]
 type Game = { id: string; tabuleiro: Board; turnoAtual: Color; status: GameStatus }
@@ -12,6 +13,11 @@ type Move = { from: [number, number]; to: [number, number]; captured: boolean }
 
 const API_URL = 'http://localhost:8080/api/partidas'
 const files = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h']
+const difficultyLabels: Record<AiDifficulty, string> = {
+  EASY: 'Fácil',
+  MEDIUM: 'Médio',
+  ADVANCED: 'Avançado',
+}
 const symbols: Record<Color, Record<PieceType, string>> = {
   BRANCA: { REI: '♔', RAINHA: '♕', TORRE: '♖', BISPO: '♗', CAVALO: '♘', PEAO: '♙' },
   PRETA: { REI: '♚', RAINHA: '♛', TORRE: '♜', BISPO: '♝', CAVALO: '♞', PEAO: '♟' },
@@ -78,6 +84,11 @@ function findMove(before: Board, after: Board, color: Color): Move | null {
 function GamePage() {
   const [searchParams] = useSearchParams()
   const isAiGame = searchParams.get('mode') === 'ai'
+  const requestedDifficulty = searchParams.get('difficulty')
+  const aiDifficulty: AiDifficulty = requestedDifficulty === 'EASY' ||
+    requestedDifficulty === 'MEDIUM' || requestedDifficulty === 'ADVANCED'
+    ? requestedDifficulty
+    : 'ADVANCED'
   const [game, setGame] = useState<Game | null>(null)
   const [selected, setSelected] = useState<[number, number] | null>(null)
   const [moves, setMoves] = useState<string[]>([])
@@ -113,7 +124,10 @@ function GamePage() {
     setAiThinking(true)
     setError('')
     try {
-      const response = await fetch(`${API_URL}/${currentGame.id}/ia`, { method: 'POST' })
+      const response = await fetch(
+        `${API_URL}/${currentGame.id}/ia?difficulty=${aiDifficulty}`,
+        { method: 'POST' },
+      )
       const updatedGame = await readGame(response)
       const aiMove = findMove(currentGame.tabuleiro, updatedGame.tabuleiro, 'PRETA')
       setGame(updatedGame)
@@ -180,7 +194,7 @@ function GamePage() {
       <Header />
       <div className="content-grid">
         <section className="play-area">
-          <div className="eyebrow">{isAiGame ? 'JOGADOR VS MÁQUINA · NÍVEL 1' : 'PARTIDA CASUAL'}</div>
+          <div className="eyebrow">{isAiGame ? `JOGADOR VS MÁQUINA · ${difficultyLabels[aiDifficulty].toUpperCase()}` : 'PARTIDA CASUAL'}</div>
           <div className="match-heading">
             <div>
               <h1>{isAiGame ? 'Duelo contra a IA' : 'Duelo no tabuleiro'}</h1>
