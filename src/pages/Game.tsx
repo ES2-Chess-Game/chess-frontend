@@ -10,7 +10,7 @@ type Board = (Piece | null)[][]
 type Game = { id: string; tabuleiro: Board; turnoAtual: Color; status: GameStatus }
 type Move = { from: [number, number]; to: [number, number]; captured: boolean }
 
-const API_URL = 'http://localhost:8080/api/partidas'
+const API_URL = '/api/partidas'
 const files = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h']
 const symbols: Record<Color, Record<PieceType, string>> = {
   BRANCA: { REI: '♔', RAINHA: '♕', TORRE: '♖', BISPO: '♗', CAVALO: '♘', PEAO: '♙' },
