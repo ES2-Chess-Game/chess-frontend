@@ -30,14 +30,14 @@ jobs:
           fi
 
   deploy:
-    if: github.event_name == 'push' && github.ref == 'refs/heads/hml'
+    if: github.event_name == 'push' && (github.ref_name == 'hml' || github.ref_name == 'prd')
     needs: build
     runs-on: ubuntu-latest
     timeout-minutes: 20
-    environment: homologacao
+    environment: ${{ github.ref_name == 'prd' && 'producao' || 'homologacao' }}
     permissions: {}
     steps:
-      - name: Publica homologação na VPS
+      - name: Publica na VPS
         env:
           VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
           VPS_KNOWN_HOSTS: ${{ vars.VPS_KNOWN_HOSTS }}
@@ -51,7 +51,7 @@ jobs:
           printf '%s\n' "$VPS_KNOWN_HOSTS" > "$RUNNER_TEMP/chess-ssh/known_hosts"
           ssh -o BatchMode=yes -o IdentitiesOnly=yes -o ConnectTimeout=15 \
             -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$RUNNER_TEMP/chess-ssh/known_hosts" \
-            -i "$RUNNER_TEMP/chess-ssh/key" chess@72.60.4.150 deploy-hml
+            -i "$RUNNER_TEMP/chess-ssh/key" chess@72.60.4.150 "deploy-$GITHUB_REF_NAME"
 
   build:
     runs-on: ubuntu-latest
