@@ -29,6 +29,30 @@ jobs:
             exit 1
           fi
 
+  deploy:
+    if: github.event_name == 'push' && (github.ref_name == 'hml' || github.ref_name == 'prd')
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    environment: ${{ github.ref_name == 'prd' && 'producao' || 'homologacao' }}
+    permissions: {}
+    steps:
+      - name: Publica na VPS
+        env:
+          VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+          VPS_KNOWN_HOSTS: ${{ vars.VPS_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          umask 077
+          test -n "$VPS_SSH_KEY"
+          test -n "$VPS_KNOWN_HOSTS"
+          install -d -m 700 "$RUNNER_TEMP/chess-ssh"
+          printf '%s\n' "$VPS_SSH_KEY" > "$RUNNER_TEMP/chess-ssh/key"
+          printf '%s\n' "$VPS_KNOWN_HOSTS" > "$RUNNER_TEMP/chess-ssh/known_hosts"
+          ssh -o BatchMode=yes -o IdentitiesOnly=yes -o ConnectTimeout=15 \
+            -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$RUNNER_TEMP/chess-ssh/known_hosts" \
+            -i "$RUNNER_TEMP/chess-ssh/key" chess@72.60.4.150 "deploy-$GITHUB_REF_NAME"
+
   build:
     runs-on: ubuntu-latest
     steps:
