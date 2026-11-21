@@ -1,6 +1,7 @@
 name: ci
 
 on:
+  workflow_dispatch:
   pull_request:
     branches: [prd, hml]
   push:
@@ -29,12 +30,12 @@ jobs:
             exit 1
           fi
 
-  deploy:
-    if: github.event_name == 'push' && (github.ref_name == 'hml' || github.ref_name == 'prd')
+  deploy-hml:
+    if: github.event_name == 'push' && github.ref_name == 'hml'
     needs: build
     runs-on: ubuntu-latest
     timeout-minutes: 20
-    environment: ${{ github.ref_name == 'prd' && 'producao' || 'homologacao' }}
+    environment: homologacao
     permissions: {}
     steps:
       - name: Publica na VPS
@@ -53,10 +54,50 @@ jobs:
             -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$RUNNER_TEMP/chess-ssh/known_hosts" \
             -i "$RUNNER_TEMP/chess-ssh/key" chess@72.60.4.150 "deploy-$GITHUB_REF_NAME"
 
+  deploy-hostinger:
+    if: github.ref == 'refs/heads/prd' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    environment: hostinger-prd
+    concurrency: chess-hostinger-prd
+    permissions: {}
+    steps:
+      - name: Ativa a revisão preparada na Hostinger
+        env:
+          VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+          VPS_KNOWN_HOSTS: ${{ vars.VPS_KNOWN_HOSTS }}
+          REVISION: ${{ needs.build.outputs.revision }}
+        run: |
+          set -euo pipefail
+          umask 077
+          [[ "$REVISION" =~ ^[0-9a-f]{64}$ ]]
+          test -n "$VPS_SSH_KEY"
+          test -n "$VPS_KNOWN_HOSTS"
+          ssh_dir=$(mktemp -d "$RUNNER_TEMP/chess-ssh.XXXXXX")
+          trap 'rm -rf -- "$ssh_dir"' EXIT
+          printf '%s\n' "$VPS_SSH_KEY" > "$ssh_dir/key"
+          printf '%s\n' "$VPS_KNOWN_HOSTS" > "$ssh_dir/known_hosts"
+          vps=$(cut -d ' ' -f1 "$ssh_dir/known_hosts")
+          ssh -T -o BatchMode=yes -o IdentitiesOnly=yes -o ConnectTimeout=12 \
+            -o StrictHostKeyChecking=yes -o HostKeyAlgorithms=ssh-ed25519 \
+            -o UserKnownHostsFile="$ssh_dir/known_hosts" -o GlobalKnownHostsFile=/dev/null \
+            -i "$ssh_dir/key" "chess-actions@$vps" "deploy-chess $REVISION"
+
   build:
+    outputs:
+      revision: ${{ steps.revision.outputs.sha }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
+      - name: Identifica a revisão da aplicação
+        id: revision
+        run: |
+          set -euo pipefail
+          revision=$(git ls-tree -r --full-tree HEAD |
+            LC_ALL=C awk -F '\t' '$2 !~ /^\.github\// && $2 != "README.md" && $2 != "LICENSE"' |
+            sha256sum | cut -d ' ' -f1)
+          printf 'sha=%s\n' "$revision" >> "$GITHUB_OUTPUT"
       - uses: actions/setup-node@v7
         with:
           node-version: 24
