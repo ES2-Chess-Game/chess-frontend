@@ -36,9 +36,10 @@ const promotionNotation: Record<PromotionType, string> = {
 function isPromotionType(piece: PieceType | undefined): piece is PromotionType {
   return piece === 'RAINHA' || piece === 'TORRE' || piece === 'BISPO' || piece === 'CAVALO'
 }
-function formatClock(seconds: number): string {
-  const mins = Math.floor(seconds / 60)
-  const secs = seconds % 60
+function formatClock(ms: number): string {
+  const totalSeconds = Math.max(0, Math.ceil(ms / 1000))
+  const mins = Math.floor(totalSeconds / 60)
+  const secs = totalSeconds % 60
   return `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`
 }
 const symbols: Record<Color, Record<PieceType, string>> = {
@@ -152,9 +153,11 @@ function GamePage() {
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
   const [aiThinking, setAiThinking] = useState(false)
-  const [whiteTime, setWhiteTime] = useState(600)
-  const [blackTime, setBlackTime] = useState(600)
+  const [whiteMs, setWhiteMs] = useState(600000)
+  const [blackMs, setBlackMs] = useState(600000)
   const [timeExpired, setTimeExpired] = useState<Color | null>(null)
+  const turnRef = useRef<Color>('BRANCA')
+  const allMovesRef = useRef<Array<{ from: [number, number]; to: [number, number] }>>([])
   const mounted = useRef(false)
 
   const isCheckmate = game?.status === 'XEQUE_MATE'
@@ -162,30 +165,78 @@ function GamePage() {
   const gameOver = isCheckmate || isStalemate || timeExpired !== null
 
   useEffect(() => {
-    if (!game || gameOver) return
+    if (game?.turnoAtual) {
+      turnRef.current = game.turnoAtual
+    }
+  }, [game?.turnoAtual])
 
+  const gameId = game?.id
+  useEffect(() => {
+    if (!gameId || gameOver) return
+
+    let lastTick = performance.now()
     const timer = setInterval(() => {
-      if (game.turnoAtual === 'BRANCA') {
-        setWhiteTime((prev) => {
-          if (prev <= 1) {
+      const now = performance.now()
+      const delta = now - lastTick
+      lastTick = now
+
+      if (turnRef.current === 'BRANCA') {
+        setWhiteMs((prev) => {
+          const next = prev - delta
+          if (next <= 0) {
             setTimeExpired('BRANCA')
             return 0
           }
-          return prev - 1
+          return next
         })
       } else {
-        setBlackTime((prev) => {
-          if (prev <= 1) {
+        setBlackMs((prev) => {
+          const next = prev - delta
+          if (next <= 0) {
             setTimeExpired('PRETA')
             return 0
           }
-          return prev - 1
+          return next
         })
       }
-    }, 1000)
+    }, 100)
 
     return () => clearInterval(timer)
-  }, [game, gameOver])
+  }, [gameId, gameOver])
+
+  const fetchAllLegalMoves = async (gameId: string) => {
+    try {
+      const response = await fetch(`${API_URL}/${gameId}/movimentos`)
+      if (response.ok) {
+        const data: unknown = await response.json()
+        if (Array.isArray(data)) {
+          const list: Array<{ from: [number, number]; to: [number, number] }> = []
+          for (const item of data) {
+            if (typeof item === 'object' && item !== null) {
+              const fromRow = 'origemLinha' in item && typeof item.origemLinha === 'number'
+                ? item.origemLinha
+                : undefined
+              const fromCol = 'origemColuna' in item && typeof item.origemColuna === 'number'
+                ? item.origemColuna
+                : undefined
+              const toRow = 'destinoLinha' in item && typeof item.destinoLinha === 'number'
+                ? item.destinoLinha
+                : undefined
+              const toCol = 'destinoColuna' in item && typeof item.destinoColuna === 'number'
+                ? item.destinoColuna
+                : undefined
+              if (fromRow !== undefined && fromCol !== undefined && toRow !== undefined && toCol !== undefined) {
+                list.push({ from: [fromRow, fromCol], to: [toRow, toCol] })
+              }
+            }
+          }
+          allMovesRef.current = list
+        }
+      }
+    } catch {
+      // Ignora falhas de rede secundárias
+    }
+  }
 
   const fetchSuggestedMoves = async (gameId: string, row: number, col: number) => {
     try {
@@ -215,6 +266,17 @@ function GamePage() {
     }
   }
 
+  const showMovesForPiece = (gameId: string, row: number, col: number) => {
+    const fromCached = allMovesRef.current
+      .filter((m) => m.from[0] === row && m.from[1] === col)
+      .map((m) => m.to)
+    if (fromCached.length > 0) {
+      setSuggestedMoves(fromCached)
+    } else {
+      void fetchSuggestedMoves(gameId, row, col)
+    }
+  }
+
   const createGame = async () => {
     setLoading(true)
     setError('')
@@ -222,12 +284,16 @@ function GamePage() {
     setSuggestedMoves([])
     setMoves([])
     setGame(null)
-    setWhiteTime(600)
-    setBlackTime(600)
+    setWhiteMs(600000)
+    setBlackMs(600000)
     setTimeExpired(null)
+    turnRef.current = 'BRANCA'
+    allMovesRef.current = []
     try {
       const response = await fetch(API_URL, { method: 'POST' })
-      setGame(await readGame(response))
+      const initialGame = await readGame(response)
+      setGame(initialGame)
+      void fetchAllLegalMoves(initialGame.id)
     } catch (requestError) {
       setError(requestError instanceof Error ? requestError.message : 'Servidor indisponível.')
     } finally {
@@ -246,14 +312,20 @@ function GamePage() {
     setAiThinking(true)
     setError('')
     try {
-      const response = await fetch(
+      // Simula tempo natural de pensamento da IA (1.3s a 2.0s) para que o relógio das pretas corra de forma realista
+      const thinkDelay = new Promise((resolve) =>
+        setTimeout(resolve, 1300 + Math.floor(Math.random() * 700))
+      )
+      const fetchPromise = fetch(
         `${API_URL}/${currentGame.id}/ia?difficulty=${aiDifficulty}`,
         { method: 'POST' },
-      )
-      const updatedGame = await readGame(response)
+      ).then((res) => readGame(res))
+
+      const [, updatedGame] = await Promise.all([thinkDelay, fetchPromise])
       const aiMove = findMove(currentGame.tabuleiro, updatedGame.tabuleiro, 'PRETA')
       setGame(updatedGame)
       if (aiMove) setMoves((current) => [...current, describeMove(aiMove)])
+      void fetchAllLegalMoves(updatedGame.id)
     } catch (requestError) {
       setError(requestError instanceof Error ? requestError.message : 'Não foi possível obter o lance da IA.')
     } finally {
@@ -296,6 +368,7 @@ function GamePage() {
         captured: game.tabuleiro[to[0]][to[1]] !== null || enPassantCapture,
         ...(promotion ? { promotion } : {}),
       })])
+      void fetchAllLegalMoves(updatedGame.id)
       if (isAiGame && updatedGame.status !== 'XEQUE_MATE' && updatedGame.status !== 'EMPATE' && updatedGame.turnoAtual === 'PRETA') {
         await playAiMove(updatedGame)
       }
@@ -316,7 +389,7 @@ function GamePage() {
       }
       setError('')
       setSelected([row, col])
-      void fetchSuggestedMoves(game.id, row, col)
+      showMovesForPiece(game.id, row, col)
       return
     }
     if (selected[0] === row && selected[1] === col) {
@@ -327,7 +400,7 @@ function GamePage() {
     if (piece && piece.cor === game.turnoAtual) {
       setError('')
       setSelected([row, col])
-      void fetchSuggestedMoves(game.id, row, col)
+      showMovesForPiece(game.id, row, col)
       return
     }
 
@@ -387,7 +460,7 @@ function GamePage() {
               <div><strong>{isAiGame ? 'Minimax' : 'Jogador 2'}</strong><span>{isAiGame ? 'Inteligência artificial' : 'Jogador local'}</span></div>
               <div className={`clock ${game?.turnoAtual === 'PRETA' && !gameOver ? 'active-clock' : ''}`}>
                 <small>PRETAS</small>
-                <b>{formatClock(blackTime)}</b>
+                <b>{formatClock(blackMs)}</b>
               </div>
             </div>
             <div className="board-wrap">
@@ -396,6 +469,10 @@ function GamePage() {
                 {game?.tabuleiro.map((boardRow, rowIndex) => boardRow.map((boardPiece, colIndex) => {
                   const isSelected = selected?.[0] === rowIndex && selected?.[1] === colIndex
                   const isSuggested = suggestedMoves.some(([r, c]) => r === rowIndex && c === colIndex)
+                  const isCapture = isSuggested && (
+                    boardPiece !== null ||
+                    (selected && game?.tabuleiro[selected[0]][selected[1]]?.tipo === 'PEAO' && selected[1] !== colIndex)
+                  )
                   return (
                     <button
                       key={`${rowIndex}-${colIndex}`}
@@ -405,8 +482,8 @@ function GamePage() {
                       aria-label={`${files[colIndex]}${8 - rowIndex}${isSuggested ? ' (movimento sugerido)' : ''}`}
                     >
                       {boardPiece && <span className={`piece ${boardPiece.cor === 'BRANCA' ? 'white-piece' : 'black-piece'}`}>{symbols[boardPiece.cor][boardPiece.tipo]}</span>}
-                      {isSuggested && !boardPiece && <span className="move-hint-dot" aria-hidden="true" />}
-                      {isSuggested && boardPiece && <span className="move-hint-capture" aria-hidden="true" />}
+                      {isSuggested && !isCapture && <span className="chess-dot-hint" aria-hidden="true" />}
+                      {isSuggested && isCapture && <span className="chess-capture-ring" aria-hidden="true" />}
                     </button>
                   )
                 })) ?? Array.from({ length: 64 }, (_, index) => <span key={index} className="square" />)}
@@ -418,7 +495,7 @@ function GamePage() {
               <div><strong>Você</strong><span>{isAiGame ? 'Jogador' : 'Jogador 1'}</span></div>
               <div className={`clock ${game?.turnoAtual === 'BRANCA' && !gameOver ? 'active-clock' : ''}`}>
                 <small>BRANCAS</small>
-                <b>{formatClock(whiteTime)}</b>
+                <b>{formatClock(whiteMs)}</b>
               </div>
             </div>
           </div>
