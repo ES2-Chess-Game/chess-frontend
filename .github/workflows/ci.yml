@@ -108,7 +108,7 @@ jobs:
       - uses: actions/checkout@v7
         with:
           repository: ES2-Chess-Game/chess-backend
-          ref: fa1efb0827293c225427dbb35b048cde148c7f5d
+          ref: ${{ (github.base_ref == 'hml' || github.ref_name == 'hml') && 'hml' || 'prd' }}
           path: system-backend
           persist-credentials: false
       - uses: actions/setup-java@v6
@@ -117,10 +117,13 @@ jobs:
           java-version: 25
       - name: Instala o Chromium para os testes de sistema
         run: npx playwright install --with-deps chromium
-      - name: Testa a partida no navegador com a API real
+      - name: Testa a partida no navegador com a API do ambiente
         timeout-minutes: 7
+        env:
+          CHESS_E2E_EXTENDED: '1'
         run: |
           set -euo pipefail
+          git -C system-backend log -1 --format='Backend testado: %H'
           (cd system-backend && ./gradlew --no-daemon bootJar)
           java -jar system-backend/build/libs/*SNAPSHOT.jar --server.address=127.0.0.1 --server.port=8080 > "$RUNNER_TEMP/chess-api.log" 2>&1 &
           api_pid=$!
