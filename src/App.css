@@ -78,6 +78,12 @@
 .error-message { margin-top: 14px; padding: 10px 13px; border-left: 3px solid #b7644b; background: #f0ded6; color: #884b3a; font-size: 12px; }
 .game-feedback { margin: 14px 0 0; color: #687168; font-size: 12px; }
 .retry-ai { margin-top: 14px; }
+.promotion-options { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 14px; }
+.promotion-options > span { margin-right: 4px; color: #687168; font-size: 12px; }
+.promotion-choice { display: flex; flex-direction: column; gap: 4px; min-width: 72px; padding: 8px; }
+.promotion-choice .piece { font-size: 30px; }
+.promotion-choice small { font-size: 10px; }
+.promotion-cancel { padding: 8px 10px; }
 
 /* --- RODAPÉ --- */
 footer { max-width: 1280px; margin: 0 auto; padding: 16px 5vw 25px; border-top: 1px solid #c9c6bb; display: flex; justify-content: space-between; color: #8a8171; font-size: 9px; letter-spacing: 1.5px; text-transform: uppercase; }

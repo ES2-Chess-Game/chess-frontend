@@ -9,7 +9,9 @@ type AiDifficulty = 'EASY' | 'MEDIUM' | 'ADVANCED'
 type Piece = { tipo: PieceType; cor: Color }
 type Board = (Piece | null)[][]
 type Game = { id: string; tabuleiro: Board; turnoAtual: Color; status: GameStatus }
-type Move = { from: [number, number]; to: [number, number]; captured: boolean }
+type PromotionType = 'RAINHA' | 'TORRE' | 'BISPO' | 'CAVALO'
+type PendingPromotion = { from: [number, number]; to: [number, number] }
+type Move = { from: [number, number]; to: [number, number]; captured: boolean; promotion?: PromotionType }
 
 const API_URL = 'http://localhost:8080/api/partidas'
 const files = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h']
@@ -17,6 +19,22 @@ const difficultyLabels: Record<AiDifficulty, string> = {
   EASY: 'Fácil',
   MEDIUM: 'Médio',
   ADVANCED: 'Avançado',
+}
+const promotionPieces: PromotionType[] = ['RAINHA', 'TORRE', 'BISPO', 'CAVALO']
+const promotionLabels: Record<PromotionType, string> = {
+  RAINHA: 'Rainha',
+  TORRE: 'Torre',
+  BISPO: 'Bispo',
+  CAVALO: 'Cavalo',
+}
+const promotionNotation: Record<PromotionType, string> = {
+  RAINHA: 'Q',
+  TORRE: 'R',
+  BISPO: 'B',
+  CAVALO: 'N',
+}
+function isPromotionType(piece: PieceType | undefined): piece is PromotionType {
+  return piece === 'RAINHA' || piece === 'TORRE' || piece === 'BISPO' || piece === 'CAVALO'
 }
 const symbols: Record<Color, Record<PieceType, string>> = {
   BRANCA: { REI: '♔', RAINHA: '♕', TORRE: '♖', BISPO: '♗', CAVALO: '♘', PEAO: '♙' },
@@ -46,10 +64,29 @@ async function readGame(response: Response): Promise<Game> {
 function describeMove(move: Move) {
   const [fromRow, fromCol] = move.from
   const [toRow, toCol] = move.to
-  return `${files[fromCol]}${8 - fromRow} → ${files[toCol]}${8 - toRow}${move.captured ? ' ×' : ''}`
+  if (fromRow === toRow && fromCol === 4 && toCol === 6) return 'O-O'
+  if (fromRow === toRow && fromCol === 4 && toCol === 2) return 'O-O-O'
+  const promotion = isPromotionType(move.promotion)
+    ? `=${promotionNotation[move.promotion]}`
+    : ''
+  return `${files[fromCol]}${8 - fromRow} → ${files[toCol]}${8 - toRow}${move.captured ? ' ×' : ''}${promotion}`
 }
 
 function findMove(before: Board, after: Board, color: Color): Move | null {
+  const homeRow = color === 'BRANCA' ? 7 : 0
+  if (
+    before[homeRow][4]?.cor === color && before[homeRow][4]?.tipo === 'REI' &&
+    after[homeRow][6]?.cor === color && after[homeRow][6]?.tipo === 'REI'
+  ) {
+    return { from: [homeRow, 4], to: [homeRow, 6], captured: false }
+  }
+  if (
+    before[homeRow][4]?.cor === color && before[homeRow][4]?.tipo === 'REI' &&
+    after[homeRow][2]?.cor === color && after[homeRow][2]?.tipo === 'REI'
+  ) {
+    return { from: [homeRow, 4], to: [homeRow, 2], captured: false }
+  }
+
   const origins: [number, number][] = []
   const destinations: [number, number][] = []
 
@@ -67,15 +104,28 @@ function findMove(before: Board, after: Board, color: Color): Move | null {
   for (const from of origins) {
     const [fromRow, fromCol] = from
     const movedPiece = before[fromRow][fromCol]
-    const to = destinations.find(([toRow, toCol]) => after[toRow][toCol]?.tipo === movedPiece?.tipo)
+    const to = destinations.find(([toRow, toCol]) => {
+      const destinationPiece = after[toRow][toCol]
+      return destinationPiece?.tipo === movedPiece?.tipo ||
+        (movedPiece?.tipo === 'PEAO' && (toRow === 0 || toRow === 7))
+    })
     if (!to) continue
 
     const [toRow, toCol] = to
     const enPassantCapture = movedPiece?.tipo === 'PEAO' &&
       fromCol !== toCol &&
       before[toRow][toCol] === null &&
+      before[fromRow][toCol]?.cor !== undefined &&
       before[fromRow][toCol]?.cor !== movedPiece.cor
-    return { from, to, captured: before[toRow][toCol] !== null || enPassantCapture }
+    const promotedPiece = movedPiece?.tipo === 'PEAO' && (toRow === 0 || toRow === 7)
+      ? after[toRow][toCol]?.tipo
+      : undefined
+    return {
+      from,
+      to,
+      captured: before[toRow][toCol] !== null || enPassantCapture,
+      ...(isPromotionType(promotedPiece) ? { promotion: promotedPiece } : {}),
+    }
   }
 
   return null
@@ -92,6 +142,7 @@ function GamePage() {
   const [game, setGame] = useState<Game | null>(null)
   const [selected, setSelected] = useState<[number, number] | null>(null)
   const [moves, setMoves] = useState<string[]>([])
+  const [pendingPromotion, setPendingPromotion] = useState<PendingPromotion | null>(null)
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
   const [aiThinking, setAiThinking] = useState(false)
@@ -140,8 +191,51 @@ function GamePage() {
     }
   }
 
+  const submitMove = async (from: [number, number], to: [number, number], promotion?: PromotionType) => {
+    if (!game) return
+    const piece = game.tabuleiro[from[0]][from[1]]
+    const enPassantCapture = piece?.tipo === 'PEAO' &&
+      from[1] !== to[1] &&
+      game.tabuleiro[to[0]][to[1]] === null &&
+      game.tabuleiro[from[0]][to[1]]?.cor !== undefined &&
+      game.tabuleiro[from[0]][to[1]]?.cor !== piece.cor
+
+    setLoading(true)
+    setError('')
+    setSelected(null)
+    setPendingPromotion(null)
+    try {
+      const response = await fetch(`${API_URL}/${game.id}/lances`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          origemLinha: from[0],
+          origemColuna: from[1],
+          destinoLinha: to[0],
+          destinoColuna: to[1],
+          ...(promotion ? { promocao: promotion } : {}),
+        }),
+      })
+      const updatedGame = await readGame(response)
+      setGame(updatedGame)
+      setMoves((current) => [...current, describeMove({
+        from,
+        to,
+        captured: game.tabuleiro[to[0]][to[1]] !== null || enPassantCapture,
+        ...(promotion ? { promotion } : {}),
+      })])
+      if (isAiGame && updatedGame.status !== 'XEQUE_MATE' && updatedGame.status !== 'EMPATE' && updatedGame.turnoAtual === 'PRETA') {
+        await playAiMove(updatedGame)
+      }
+    } catch (requestError) {
+      setError(requestError instanceof Error ? requestError.message : 'Não foi possível realizar o movimento.')
+    } finally {
+      setLoading(false)
+    }
+  }
+
   const play = async (row: number, col: number) => {
-    if (!game || loading || game.status === 'XEQUE_MATE' || game.status === 'EMPATE' || (isAiGame && game.turnoAtual !== 'BRANCA')) return
+    if (!game || loading || pendingPromotion || game.status === 'XEQUE_MATE' || game.status === 'EMPATE' || (isAiGame && game.turnoAtual !== 'BRANCA')) return
     const piece = game.tabuleiro[row][col]
     if (!selected) {
       if (!piece || piece.cor !== game.turnoAtual) {
@@ -158,32 +252,17 @@ function GamePage() {
     }
 
     const from = selected
-    const captured = game.tabuleiro[row][col] !== null
-    setLoading(true)
-    setError('')
+    const to: [number, number] = [row, col]
+    const movingPiece = game.tabuleiro[from[0]][from[1]]
     setSelected(null)
-    try {
-      const response = await fetch(`${API_URL}/${game.id}/lances`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          origemLinha: from[0],
-          origemColuna: from[1],
-          destinoLinha: row,
-          destinoColuna: col,
-        }),
+    if (movingPiece?.tipo === 'PEAO' && (row === 0 || row === 7)) {
+      setPendingPromotion({
+        from,
+        to,
       })
-      const updatedGame = await readGame(response)
-      setGame(updatedGame)
-      setMoves((current) => [...current, describeMove({ from, to: [row, col], captured })])
-      if (isAiGame && updatedGame.status !== 'XEQUE_MATE' && updatedGame.status !== 'EMPATE' && updatedGame.turnoAtual === 'PRETA') {
-        await playAiMove(updatedGame)
-      }
-    } catch (requestError) {
-      setError(requestError instanceof Error ? requestError.message : 'Não foi possível realizar o movimento.')
-    } finally {
-      setLoading(false)
+      return
     }
+    void submitMove(from, to)
   }
 
   const aiTurnPending = isAiGame && game?.status !== 'XEQUE_MATE' && game?.status !== 'EMPATE' && game?.turnoAtual === 'PRETA'
@@ -218,7 +297,7 @@ function GamePage() {
                       key={`${rowIndex}-${colIndex}`}
                       className={`square ${(rowIndex + colIndex) % 2 ? 'dark' : 'light'} ${isSelected ? 'selected' : ''}`}
                       onClick={() => void play(rowIndex, colIndex)}
-                      disabled={loading || !game || gameOver || (isAiGame && game.turnoAtual !== 'BRANCA')}
+                      disabled={loading || !game || gameOver || Boolean(pendingPromotion) || (isAiGame && game.turnoAtual !== 'BRANCA')}
                       aria-label={`${files[colIndex]}${8 - rowIndex}`}
                     >
                       {boardPiece && <span className={`piece ${boardPiece.cor === 'BRANCA' ? 'white-piece' : 'black-piece'}`}>{symbols[boardPiece.cor][boardPiece.tipo]}</span>}
@@ -234,11 +313,40 @@ function GamePage() {
               <div className="clock active-clock"><small>BRANCAS</small><b>10:00</b></div>
             </div>
           </div>
+          {pendingPromotion && game && (
+            <div className="promotion-options" role="group" aria-label="Escolha a peça da promoção">
+              <span>Promover peão:</span>
+              {promotionPieces.map((piece) => (
+                <button
+                  key={piece}
+                  type="button"
+                  className="new-game promotion-choice"
+                  onClick={() => void submitMove(pendingPromotion.from, pendingPromotion.to, piece)}
+                  disabled={loading}
+                  aria-label={`Promover para ${promotionLabels[piece]}`}
+                >
+                  <span className={`piece ${game.turnoAtual === 'BRANCA' ? 'white-piece' : 'black-piece'}`}>
+                    {symbols[game.turnoAtual][piece]}
+                  </span>
+                  <small>{promotionLabels[piece]}</small>
+                </button>
+              ))}
+              <button
+                type="button"
+                className="new-game promotion-cancel"
+                onClick={() => setPendingPromotion(null)}
+                disabled={loading}
+              >
+                Cancelar
+              </button>
+            </div>
+          )}
           {aiTurnPending && !loading && (
             <button className="new-game retry-ai" onClick={() => void playAiMove(game!)}>Tentar resposta da IA</button>
           )}
           {loading && <p className="game-feedback" role="status">{aiThinking ? 'A IA está pensando…' : 'Atualizando partida…'}</p>}
           {gameOver && <p className="game-feedback" role="status">{game?.status === 'XEQUE_MATE' ? 'Xeque-mate.' : 'Empate.'}</p>}
+          {game?.status === 'XEQUE' && <p className="game-feedback" role="status">Xeque!</p>}
           {error && <div className="error-message" role="alert">! {error}</div>}
         </section>
         <aside className="side-panel">
