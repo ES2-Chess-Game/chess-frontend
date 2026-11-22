@@ -231,3 +231,40 @@ test.describe('API com níveis e sugestões', () => {
     })
   }
 })
+
+test.describe('partidas persistentes', () => {
+  test.skip(process.env.CHESS_E2E_PERSISTENT !== '1', 'Requer o backend com persistência de partidas e sessões')
+
+  test('retoma uma partida e recupera seus lances no histórico da sessão', async ({ page, browser }) => {
+    await page.goto('/local')
+    await page.getByLabel('Jogador 1', { exact: true }).fill('Lia')
+    await page.getByLabel('Jogador 2', { exact: true }).fill('Rui')
+    await page.getByLabel('Controle de tempo').selectOption('match')
+    await page.getByRole('button', { name: 'Começar partida' }).click()
+    await move(page, 'e2', 'e4')
+    await expect(page.getByRole('status')).toHaveText('Vez de Rui · Pretas')
+
+    await page.goto('/')
+    await page.getByRole('link', { name: 'Retomar partida' }).click()
+    await expect(page.getByRole('status')).toHaveText('Vez de Rui · Pretas')
+    await expect(square(page, 'e4')).toHaveAccessibleName('e4, peão branco')
+    await expect(page.getByRole('timer', { name: 'Tempo das pretas' })).toBeVisible()
+    await expect(page.getByRole('listitem')).toHaveText('e2 → e4')
+
+    await page.getByRole('button', { name: 'Desistir da partida' }).click()
+    await page.getByRole('dialog').getByRole('button', { name: 'Desistir', exact: true }).click()
+    await expect(page.getByRole('status')).toHaveText('Desistência · Lia vence')
+    await page.goto('/')
+    await page.getByRole('link', { name: 'Ver histórico' }).click()
+    await page.getByRole('link', { name: /Desistência · Vitória · Lia/ }).click()
+    await expect(page.getByRole('listitem')).toHaveText('e2 → e4')
+
+    const other = await browser.newContext()
+    try {
+      const response = await other.request.get(new URL('/api/partidas/historico', page.url()).toString())
+      expect(await response.json()).toEqual([])
+    } finally {
+      await other.close()
+    }
+  })
+})

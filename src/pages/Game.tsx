@@ -1,16 +1,17 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { KeyboardEvent } from 'react'
-import { Link, useLocation, useSearchParams } from 'react-router-dom'
+import { Link, useLocation, useNavigate, useSearchParams } from 'react-router-dom'
 import AiIcon from '../components/AiIcon'
 import { gameApi, readAiDifficulty, useGameCapabilities } from '../gameCapabilities'
 import { clockDuration, formatClock, readClockSetting } from '../moveClock'
+import { savedMoveText, type SavedGame } from '../savedGame'
 
 type Color = 'BRANCA' | 'PRETA'
 type PieceType = 'PEAO' | 'TORRE' | 'CAVALO' | 'BISPO' | 'RAINHA' | 'REI'
-type GameStatus = 'EM_ANDAMENTO' | 'XEQUE' | 'XEQUE_MATE' | 'EMPATE'
+type GameStatus = 'EM_ANDAMENTO' | 'XEQUE' | 'XEQUE_MATE' | 'EMPATE' | 'TEMPO_ESGOTADO' | 'DESISTENCIA'
 type Piece = { tipo: PieceType; cor: Color }
 type Board = (Piece | null)[][]
-type Game = { id: string; tabuleiro: Board; turnoAtual: Color; status: GameStatus; vencedor?: Color | null }
+type Game = SavedGame & { tabuleiro: Board; turnoAtual: Color; status: GameStatus }
 type Square = [number, number]
 type Promotion = 'RAINHA' | 'TORRE' | 'BISPO' | 'CAVALO'
 type Move = { from: Square; to: Square }
@@ -39,7 +40,7 @@ function isPromotion(piece: PieceType | undefined): piece is Promotion {
 }
 
 function isFinished(game: Game) {
-  return game.status === 'XEQUE_MATE' || game.status === 'EMPATE'
+  return game.status !== 'EM_ANDAMENTO' && game.status !== 'XEQUE'
 }
 
 function squareLabel(row: number, col: number, piece: Piece | null) {
@@ -63,7 +64,7 @@ async function readGame(response: Response): Promise<Game> {
     !('id' in data) || typeof data.id !== 'string' ||
     !('tabuleiro' in data) || !Array.isArray(data.tabuleiro) ||
     !('turnoAtual' in data) || (data.turnoAtual !== 'BRANCA' && data.turnoAtual !== 'PRETA') ||
-    !('status' in data) || !['EM_ANDAMENTO', 'XEQUE', 'XEQUE_MATE', 'EMPATE'].includes(String(data.status))
+    !('status' in data) || !['EM_ANDAMENTO', 'XEQUE', 'XEQUE_MATE', 'EMPATE', 'TEMPO_ESGOTADO', 'DESISTENCIA'].includes(String(data.status))
   ) {
     throw new Error('O servidor retornou um estado de partida inválido')
   }
@@ -113,6 +114,8 @@ function findMove(before: Board, after: Board, color: Color): Move | null {
 function Match() {
   const [searchParams] = useSearchParams()
   const { state } = useLocation()
+  const navigate = useNavigate()
+  const resumeId = searchParams.get('resume')
   const isAiGame = searchParams.get('mode') === 'ai'
   const clockSetting = readClockSetting(searchParams.get('time'))
   const duration = clockDuration(clockSetting)
@@ -120,8 +123,14 @@ function Match() {
   const difficulty = readAiDifficulty(searchParams.get('difficulty'))
   const capabilities = useGameCapabilities()
   const levelAvailable = !isAiGame || difficulty.id === 'EASY' || capabilities?.niveisIa.includes(difficulty.id) === true
-  const players = isAiGame ? {} : (state as { players?: Partial<Record<Color, string>> } | null)?.players ?? {}
+  const names = (state as { players?: Partial<Record<Color, string>> } | null)?.players
+  const whiteName = isAiGame ? '' : names?.BRANCA ?? ''
+  const blackName = isAiGame ? '' : names?.PRETA ?? ''
   const [game, setGame] = useState<Game | null>(null)
+  const players = {
+    BRANCA: game?.configuracao?.brancas || whiteName,
+    PRETA: game?.configuracao?.pretas || blackName,
+  }
   const [selected, setSelected] = useState<Square | null>(null)
   const [suggestions, setSuggestions] = useState<{ forSquare: Square; destinations: Square[] } | null>(null)
   const [promotion, setPromotion] = useState<Move | null>(null)
@@ -148,7 +157,11 @@ function Match() {
       matchTime.current[previous.color] = Math.max(0, previous.deadline - now)
     }
     const color = nextGame.turnoAtual
-    const budget = matchClock ? matchTime.current[color] : duration
+    if (matchClock && nextGame.brancasMs != null && nextGame.pretasMs != null) {
+      matchTime.current = { BRANCA: nextGame.brancasMs, PRETA: nextGame.pretasMs }
+    }
+    const serverBudget = color === 'BRANCA' ? nextGame.brancasMs : nextGame.pretasMs
+    const budget = serverBudget ?? (matchClock ? matchTime.current[color] : duration)
     const timed = duration > 0 && !isFinished(nextGame)
     clock.current = timed ? { deadline: now + budget, color } : null
     setMatchSeconds(matchClock ? {
@@ -187,8 +200,12 @@ function Match() {
     if (!turnClock || Date.now() < turnClock.deadline) return false
 
     finishMatch({ reason: 'Tempo esgotado', loser: turnClock.color })
+    if (game?.configuracao) {
+      // A consulta encerra o jogo também no servidor quando o relógio realmente zera
+      void fetch(`${gameApi}/${game.id}`).catch(() => {})
+    }
     return true
-  }, [finishMatch])
+  }, [finishMatch, game])
 
   useEffect(() => {
     if (!duration) return
@@ -207,7 +224,7 @@ function Match() {
     return () => window.clearInterval(interval)
   }, [duration, expireTurn, matchClock])
 
-  const createGame = useCallback(async () => {
+  const createGame = useCallback(async (restore?: string) => {
     requests.current?.abort()
     const controller = new AbortController()
     requests.current = controller
@@ -227,24 +244,40 @@ function Match() {
     setMoves([])
     setGame(null)
     try {
-      const response = await fetch(gameApi, { method: 'POST', signal })
+      const response = restore
+        ? await fetch(`${gameApi}/${encodeURIComponent(restore)}`, { signal })
+        : await fetch(gameApi, {
+          method: 'POST',
+          signal,
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            modo: isAiGame ? 'ai' : 'local',
+            ...(isAiGame ? { dificuldade: difficulty.id } : {}),
+            tempo: clockSetting,
+            brancas: whiteName,
+            pretas: blackName,
+          }),
+        })
       const nextGame = await readGame(response)
-      if (!signal.aborted) beginTurn(nextGame)
+      if (!signal.aborted) {
+        setMoves(nextGame.lances?.map(savedMoveText) ?? [])
+        beginTurn(nextGame)
+      }
     } catch (requestError) {
       if (!signal.aborted) setError(requestError instanceof Error ? requestError.message : 'Servidor indisponível')
     } finally {
       if (!signal.aborted) setLoading(false)
     }
-  }, [beginTurn, duration])
+  }, [beginTurn, blackName, clockSetting, difficulty.id, duration, isAiGame, whiteName])
 
   useEffect(() => {
     if (!levelAvailable) return
-    const start = window.setTimeout(() => void createGame(), 0)
+    const start = window.setTimeout(() => void createGame(resumeId ?? undefined), 0)
     return () => {
       window.clearTimeout(start)
       requests.current?.abort()
     }
-  }, [createGame, levelAvailable])
+  }, [createGame, levelAvailable, resumeId])
 
   const gameId = game?.id
   const showSuggestions = capabilities?.sugestoesDeLances === true
@@ -354,10 +387,48 @@ function Match() {
     status = game.vencedor ? `Xeque-mate · ${winText(game.vencedor)}` : 'Xeque-mate'
   } else if (game?.status === 'EMPATE') {
     status = 'Empate'
+  } else if (game?.status === 'TEMPO_ESGOTADO' || game?.status === 'DESISTENCIA') {
+    const reason = game.status === 'TEMPO_ESGOTADO' ? 'Tempo esgotado' : 'Desistência'
+    status = game.vencedor ? `${reason} · ${winText(game.vencedor)}` : reason
   } else if (game?.status === 'XEQUE') {
     status = `${playerLabel(turn)} em xeque`
   } else if (game) {
     status = players[turn] ? `Vez de ${playerLabel(turn)}` : `Vez das ${colorLabels[turn].toLowerCase()}`
+  }
+
+  function restart() {
+    if (!resumeId) {
+      void createGame()
+      return
+    }
+    const params = new URLSearchParams(searchParams)
+    params.delete('resume')
+    void navigate(`/game?${params}`, { replace: true, state: { players } })
+  }
+
+  async function resign() {
+    if (!game || !resigning || expireTurn()) return
+    if (!game.configuracao) {
+      finishMatch({ reason: 'Desistência', loser: resigning })
+      return
+    }
+    const signal = requests.current?.signal
+    if (!signal || signal.aborted) return
+    try {
+      setError('')
+      const response = await fetch(`${gameApi}/${game.id}/desistencia?cor=${resigning}`, { method: 'POST', signal })
+      const finished = await readGame(response)
+      if (signal.aborted) return
+      beginTurn(finished)
+      resignationDialog.current?.close()
+      setResigning(null)
+      setSelected(null)
+    } catch (requestError) {
+      if (!signal.aborted) {
+        resignationDialog.current?.close()
+        setError(requestError instanceof Error ? requestError.message : 'Não foi possível encerrar a partida')
+      }
+    }
   }
 
   function play(row: number, col: number) {
@@ -412,7 +483,7 @@ function Match() {
           </h1>
         </div>
         <div className="game-header-actions" role="group" aria-label="Ações da partida">
-          <button className="button-secondary" onClick={() => void createGame()} disabled={loading || !levelAvailable}>
+          <button className="button-secondary" onClick={restart} disabled={loading || !levelAvailable}>
             Nova partida
           </button>
           <button
@@ -558,9 +629,7 @@ function Match() {
           <button className="button-secondary" onClick={() => resignationDialog.current?.close()}>
             Continuar jogando
           </button>
-          <button className="button-secondary button-danger" onClick={() => {
-            if (resigning && !expireTurn()) finishMatch({ reason: 'Desistência', loser: resigning })
-          }}>
+          <button className="button-secondary button-danger" onClick={() => void resign()}>
             Desistir
           </button>
         </div>

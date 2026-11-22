@@ -121,6 +121,7 @@ jobs:
         timeout-minutes: 7
         env:
           CHESS_E2E_EXTENDED: '1'
+          CHESS_E2E_PERSISTENT: '1'
         run: |
           set -euo pipefail
           git -C system-backend log -1 --format='Backend testado: %H'
