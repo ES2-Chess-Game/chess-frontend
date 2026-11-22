@@ -1,35 +1,30 @@
-import { useNavigate } from 'react-router-dom'
-import Header from '../components/Header'
+import { Link } from 'react-router-dom'
 
 export default function Difficulty() {
-  const navigate = useNavigate()
-
   return (
-    <main className="app-shell">
-      <Header />
-      <div className="menu-container">
-        <div className="match-heading" style={{ flexDirection: 'column', alignItems: 'center', textAlign: 'center', marginTop: '80px' }}>
-          <div className="eyebrow" style={{ marginBottom: '16px' }}>INTELIGÊNCIA ARTIFICIAL</div>
-          <h1>Nível de Dificuldade</h1>
-          <p>Selecione a força de cálculo do motor Min-Max.</p>
-        </div>
-        
-        <div className="menu-options">
-          <button className="new-game menu-btn" onClick={() => navigate('/game?mode=ai&level=1')}>
-            Nível 1 (Básico)
-          </button>
-          <button className="new-game menu-btn" disabled title="Em desenvolvimento pela equipe de Backend">
-            Nível 2 (Intermediário) — Em breve
-          </button>
-          <button className="new-game menu-btn" disabled title="Em desenvolvimento pela equipe de Backend">
-            Nível 3 (Avançado) — Em breve
-          </button>
-          
-          <button className="new-game menu-btn secondary" onClick={() => navigate('/')}>
-            Voltar
-          </button>
-        </div>
-      </div>
+    <main id="conteudo" tabIndex={-1} className="page difficulty">
+      <Link className="back-link" to="/">← Modos de jogo</Link>
+      <p className="eyebrow">Contra a máquina</p>
+      <h1>Escolha o nível</h1>
+      <p className="intro">Você joga com as brancas. O Minimax responde com as pretas.</p>
+
+      <ul className="level-list">
+        <li>
+          <Link className="mode-link mode-primary" to="/game?mode=ai&level=1">
+            <span className="level-number" aria-hidden="true">01</span>
+            <span><strong>Básico</strong><small>Começar uma partida</small></span>
+            <span className="mode-arrow" aria-hidden="true">↗</span>
+          </Link>
+        </li>
+        <li className="level-unavailable">
+          <span className="level-number" aria-hidden="true">02</span>
+          <strong>Intermediário</strong><span>Em breve</span>
+        </li>
+        <li className="level-unavailable">
+          <span className="level-number" aria-hidden="true">03</span>
+          <strong>Avançado</strong><span>Em breve</span>
+        </li>
+      </ul>
     </main>
   )
 }

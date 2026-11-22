@@ -1,24 +1,35 @@
 import { useEffect, useRef, useState } from 'react'
-import { useSearchParams } from 'react-router-dom'
-import Header from '../components/Header'
+import type { KeyboardEvent } from 'react'
+import { Link, useSearchParams } from 'react-router-dom'
 
 type Color = 'BRANCA' | 'PRETA'
 type PieceType = 'PEAO' | 'TORRE' | 'CAVALO' | 'BISPO' | 'RAINHA' | 'REI'
 type GameStatus = 'EM_ANDAMENTO' | 'XEQUE' | 'XEQUE_MATE' | 'EMPATE'
 type Piece = { tipo: PieceType; cor: Color }
 type Board = (Piece | null)[][]
-type Game = { id: string; tabuleiro: Board; turnoAtual: Color; status: GameStatus }
+type Game = { id: string; tabuleiro: Board; turnoAtual: Color; status: GameStatus; vencedor?: Color | null }
 type Move = { from: [number, number]; to: [number, number]; captured: boolean }
 
 const API_URL = '/api/partidas'
 const files = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h']
-const symbols: Record<Color, Record<PieceType, string>> = {
-  BRANCA: { REI: '♔', RAINHA: '♕', TORRE: '♖', BISPO: '♗', CAVALO: '♘', PEAO: '♙' },
-  PRETA: { REI: '♚', RAINHA: '♛', TORRE: '♜', BISPO: '♝', CAVALO: '♞', PEAO: '♟' },
+const symbols: Record<PieceType, string> = {
+  REI: '♚', RAINHA: '♛', TORRE: '♜', BISPO: '♝', CAVALO: '♞', PEAO: '♟',
+}
+const pieceNames: Record<PieceType, string> = {
+  REI: 'rei', RAINHA: 'rainha', TORRE: 'torre', BISPO: 'bispo', CAVALO: 'cavalo', PEAO: 'peão',
+}
+const rows = [8, 7, 6, 5, 4, 3, 2, 1]
+
+function squareLabel(row: number, col: number, piece: Piece | null) {
+  const square = `${files[col]}${8 - row}`
+  if (!piece) return `${square}, vazia`
+  const female = piece.tipo === 'RAINHA' || piece.tipo === 'TORRE'
+  const color = piece.cor === 'BRANCA' ? (female ? 'branca' : 'branco') : (female ? 'preta' : 'preto')
+  return `${square}, ${pieceNames[piece.tipo]} ${color}`
 }
 
 async function readGame(response: Response): Promise<Game> {
-  const data: unknown = await response.json()
+  const data: unknown = await response.json().catch(() => null)
   if (!response.ok) {
     const message = typeof data === 'object' && data !== null && 'erro' in data && typeof data.erro === 'string'
       ? data.erro
@@ -80,6 +91,8 @@ function GamePage() {
   const isAiGame = searchParams.get('mode') === 'ai'
   const [game, setGame] = useState<Game | null>(null)
   const [selected, setSelected] = useState<[number, number] | null>(null)
+  const [focused, setFocused] = useState(52)
+  const squares = useRef<(HTMLButtonElement | null)[]>([])
   const [moves, setMoves] = useState<string[]>([])
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
@@ -90,6 +103,7 @@ function GamePage() {
     setLoading(true)
     setError('')
     setSelected(null)
+    setFocused(52)
     setMoves([])
     setGame(null)
     try {
@@ -172,78 +186,118 @@ function GamePage() {
     }
   }
 
-  const aiTurnPending = isAiGame && game?.status !== 'XEQUE_MATE' && game?.status !== 'EMPATE' && game?.turnoAtual === 'PRETA'
   const gameOver = game?.status === 'XEQUE_MATE' || game?.status === 'EMPATE'
+  const aiTurnPending = !!game && !gameOver && isAiGame && game.turnoAtual === 'PRETA'
+  const blocked = loading || gameOver || aiTurnPending
+  const turn = game?.turnoAtual === 'PRETA' ? 'Pretas' : 'Brancas'
+  const status = loading
+    ? (aiThinking ? 'O Minimax está pensando…' : 'Atualizando partida…')
+    : game?.status === 'XEQUE_MATE'
+      ? game.vencedor ? `Xeque-mate. ${game.vencedor === 'PRETA' ? 'Pretas' : 'Brancas'} vencem.` : 'Xeque-mate'
+      : game?.status === 'EMPATE'
+        ? 'Empate'
+        : game?.status === 'XEQUE'
+          ? `${turn} em xeque`
+          : game ? `Vez das ${turn.toLowerCase()}` : 'Partida indisponível'
+
+  const focusSquare = (event: KeyboardEvent<HTMLButtonElement>, row: number, col: number) => {
+    let next = row * 8 + col
+    switch (event.key) {
+      case 'ArrowUp': next = Math.max(0, row - 1) * 8 + col; break
+      case 'ArrowDown': next = Math.min(7, row + 1) * 8 + col; break
+      case 'ArrowLeft': next = row * 8 + Math.max(0, col - 1); break
+      case 'ArrowRight': next = row * 8 + Math.min(7, col + 1); break
+      case 'Home': next = row * 8; break
+      case 'End': next = row * 8 + 7; break
+      default: return
+    }
+    event.preventDefault()
+    squares.current[next]?.focus()
+  }
 
   return (
-    <main className="app-shell">
-      <Header />
-      <div className="content-grid">
-        <section className="play-area">
-          <div className="eyebrow">{isAiGame ? 'JOGADOR VS MÁQUINA · NÍVEL 1' : 'PARTIDA CASUAL'}</div>
-          <div className="match-heading">
-            <div>
-              <h1>{isAiGame ? 'Duelo contra a IA' : 'Duelo no tabuleiro'}</h1>
-              <p>{isAiGame ? 'Você joga com as brancas; a IA responde com as pretas.' : 'Concentre-se no próximo movimento.'}</p>
-            </div>
-            <button className="new-game" onClick={() => void createGame()} disabled={loading}>↻ <span>Nova partida</span></button>
-          </div>
+    <main id="conteudo" tabIndex={-1} className="page game-page">
+      <Link className="back-link" to={isAiGame ? '/difficulty' : '/'}>
+        ← {isAiGame ? 'Escolher nível' : 'Modos de jogo'}
+      </Link>
+      <div className="game-heading">
+        <div>
+          <p className="eyebrow">{isAiGame ? 'Nível básico' : 'Dois jogadores'}</p>
+          <h1>{isAiGame ? 'Contra a máquina' : 'Partida local'}</h1>
+        </div>
+        <button className="button-secondary" onClick={() => void createGame()} disabled={loading}>
+          Nova partida
+        </button>
+      </div>
+
+      <div className="game-layout">
+        <section className="play-area" aria-label="Partida de xadrez">
+          <p className="turn-status" role="status">
+            <span className={`turn-dot ${game?.turnoAtual === 'PRETA' ? 'turn-black' : ''}`} aria-hidden="true" />
+            {status}
+          </p>
+
           <div className="board-frame">
-            <div className="player-row">
-              <div className="avatar black-avatar">♟</div>
-              <div><strong>{isAiGame ? 'Minimax' : 'Jogador 2'}</strong><span>{isAiGame ? 'Inteligência artificial' : 'Jogador local'}</span></div>
-              <div className="clock"><small>PRETAS</small><b>10:00</b></div>
-            </div>
             <div className="board-wrap">
-              <div className="rank-labels">{[8, 7, 6, 5, 4, 3, 2, 1].map((rank) => <span key={rank}>{rank}</span>)}</div>
-              <div className="board">
-                {game?.tabuleiro.map((boardRow, rowIndex) => boardRow.map((boardPiece, colIndex) => {
-                  const isSelected = selected?.[0] === rowIndex && selected?.[1] === colIndex
+              <div className="rank-labels" aria-hidden="true">
+                {rows.map(rank => <span key={rank}>{rank}</span>)}
+              </div>
+              <div className="board" role="group" aria-label="Tabuleiro de xadrez">
+                {game?.tabuleiro.flatMap((boardRow, row) => boardRow.map((piece, col) => {
+                  const index = row * 8 + col
+                  const isSelected = selected?.[0] === row && selected?.[1] === col
                   return (
                     <button
-                      key={`${rowIndex}-${colIndex}`}
-                      className={`square ${(rowIndex + colIndex) % 2 ? 'dark' : 'light'} ${isSelected ? 'selected' : ''}`}
-                      onClick={() => void play(rowIndex, colIndex)}
-                      disabled={loading || !game || gameOver || (isAiGame && game.turnoAtual !== 'BRANCA')}
-                      aria-label={`${files[colIndex]}${8 - rowIndex}`}
+                      key={index}
+                      ref={element => { squares.current[index] = element }}
+                      className={`square ${(row + col) % 2 ? 'dark' : 'light'}`}
+                      onClick={() => void play(row, col)}
+                      onFocus={() => setFocused(index)}
+                      onKeyDown={event => focusSquare(event, row, col)}
+                      tabIndex={focused === index ? 0 : -1}
+                      aria-pressed={isSelected}
+                      aria-disabled={blocked}
+                      aria-label={squareLabel(row, col, piece)}
                     >
-                      {boardPiece && <span className={`piece ${boardPiece.cor === 'BRANCA' ? 'white-piece' : 'black-piece'}`}>{symbols[boardPiece.cor][boardPiece.tipo]}</span>}
+                      {piece && (
+                        <span className={`piece ${piece.cor === 'BRANCA' ? 'white-piece' : 'black-piece'}`} aria-hidden="true">
+                          {symbols[piece.tipo]}
+                        </span>
+                      )}
                     </button>
                   )
-                })) ?? Array.from({ length: 64 }, (_, index) => <span key={index} className="square" />)}
+                })) ?? Array.from({ length: 64 }, (_, index) => (
+                  <span key={index} className={`square ${(Math.floor(index / 8) + index % 8) % 2 ? 'dark' : 'light'}`} />
+                ))}
               </div>
             </div>
-            <div className="file-labels">{files.map((file) => <span key={file}>{file}</span>)}</div>
-            <div className="player-row bottom-player">
-              <div className="avatar white-avatar">♙</div>
-              <div><strong>Você</strong><span>{isAiGame ? 'Jogador' : 'Jogador 1'}</span></div>
-              <div className="clock active-clock"><small>BRANCAS</small><b>10:00</b></div>
-            </div>
+            <div className="file-labels" aria-hidden="true">{files.map(file => <span key={file}>{file}</span>)}</div>
           </div>
+
+          {error && <p className="error-message" role="alert">{error}</p>}
           {aiTurnPending && !loading && (
-            <button className="new-game retry-ai" onClick={() => void playAiMove(game!)}>Tentar resposta da IA</button>
+            <button className="button-secondary game-retry" onClick={() => void playAiMove(game)}>
+              Tentar resposta da máquina
+            </button>
           )}
-          {loading && <p className="game-feedback" role="status">{aiThinking ? 'A IA está pensando…' : 'Atualizando partida…'}</p>}
-          {gameOver && <p className="game-feedback" role="status">{game?.status === 'XEQUE_MATE' ? 'Xeque-mate.' : 'Empate.'}</p>}
-          {error && <div className="error-message" role="alert">! {error}</div>}
         </section>
-        <aside className="side-panel">
-          <div className="turn-card">
-            <div className={`turn-indicator ${game?.turnoAtual === 'PRETA' ? 'turn-black' : ''}`} />
-            <div><span>VEZ DE JOGAR</span><strong>{game?.turnoAtual === 'PRETA' ? (isAiGame ? 'Minimax' : 'Pretas') : 'Brancas'}</strong></div>
-            <div className="status-pill">{game?.status === 'EM_ANDAMENTO' ? 'Ao vivo' : game?.status ?? 'Carregando'}</div>
-          </div>
-          <div className="panel-section">
-            <div className="section-heading"><h2>Movimentos</h2><span>{moves.length}</span></div>
-            {moves.length
-              ? <div className="move-list">{moves.map((move, index) => <div key={`${move}-${index}`}><small>{String(index + 1).padStart(2, '0')}</small><span>{move}</span></div>)}</div>
-              : <div className="empty-state"><span>♜</span><p>A partida começa quando<br />você fizer o primeiro lance.</p></div>}
-          </div>
-          <div className="panel-section info-section">
+
+        <aside className="game-details" aria-label="Detalhes da partida">
+          <section>
+            <div className="detail-heading"><h2>Lances</h2><span>{moves.length}</span></div>
+            {moves.length > 0
+              ? <ol className="move-list">{moves.map((move, index) => <li key={index}>{move}</li>)}</ol>
+              : <p className="muted">Os lances aparecem aqui conforme a partida avança.</p>}
+          </section>
+          <section>
             <h2>Como jogar</h2>
-            <p>{isAiGame ? 'Faça seu lance com as brancas. O Minimax responderá automaticamente.' : 'Selecione uma peça da cor da vez e depois escolha a casa de destino.'}</p>
-            <div className="legend"><span><i className="legend-square light" /> sua vez</span><span><i className="legend-square dark" /> tabuleiro</span></div>
-          </div>
+            <p className="muted">
+              {isAiGame
+                ? 'Jogue com as brancas. O Minimax responde com as pretas.'
+                : 'Selecione uma peça da cor da vez e depois a casa de destino.'}
+            </p>
+            <p className="muted keyboard-help">No teclado, use as setas para navegar e Enter para selecionar.</p>
+          </section>
         </aside>
       </div>
     </main>
