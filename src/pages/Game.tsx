@@ -36,6 +36,11 @@ const promotionNotation: Record<PromotionType, string> = {
 function isPromotionType(piece: PieceType | undefined): piece is PromotionType {
   return piece === 'RAINHA' || piece === 'TORRE' || piece === 'BISPO' || piece === 'CAVALO'
 }
+function formatClock(seconds: number): string {
+  const mins = Math.floor(seconds / 60)
+  const secs = seconds % 60
+  return `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`
+}
 const symbols: Record<Color, Record<PieceType, string>> = {
   BRANCA: { REI: '♔', RAINHA: '♕', TORRE: '♖', BISPO: '♗', CAVALO: '♘', PEAO: '♙' },
   PRETA: { REI: '♚', RAINHA: '♛', TORRE: '♜', BISPO: '♝', CAVALO: '♞', PEAO: '♟' },
@@ -141,19 +146,85 @@ function GamePage() {
     : 'ADVANCED'
   const [game, setGame] = useState<Game | null>(null)
   const [selected, setSelected] = useState<[number, number] | null>(null)
+  const [suggestedMoves, setSuggestedMoves] = useState<[number, number][]>([])
   const [moves, setMoves] = useState<string[]>([])
   const [pendingPromotion, setPendingPromotion] = useState<PendingPromotion | null>(null)
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
   const [aiThinking, setAiThinking] = useState(false)
+  const [whiteTime, setWhiteTime] = useState(600)
+  const [blackTime, setBlackTime] = useState(600)
+  const [timeExpired, setTimeExpired] = useState<Color | null>(null)
   const mounted = useRef(false)
+
+  const isCheckmate = game?.status === 'XEQUE_MATE'
+  const isStalemate = game?.status === 'EMPATE'
+  const gameOver = isCheckmate || isStalemate || timeExpired !== null
+
+  useEffect(() => {
+    if (!game || gameOver) return
+
+    const timer = setInterval(() => {
+      if (game.turnoAtual === 'BRANCA') {
+        setWhiteTime((prev) => {
+          if (prev <= 1) {
+            setTimeExpired('BRANCA')
+            return 0
+          }
+          return prev - 1
+        })
+      } else {
+        setBlackTime((prev) => {
+          if (prev <= 1) {
+            setTimeExpired('PRETA')
+            return 0
+          }
+          return prev - 1
+        })
+      }
+    }, 1000)
+
+    return () => clearInterval(timer)
+  }, [game, gameOver])
+
+  const fetchSuggestedMoves = async (gameId: string, row: number, col: number) => {
+    try {
+      const response = await fetch(`${API_URL}/${gameId}/movimentos?linha=${row}&coluna=${col}`)
+      if (response.ok) {
+        const data: unknown = await response.json()
+        if (Array.isArray(data)) {
+          const list: [number, number][] = []
+          for (const item of data) {
+            if (typeof item === 'object' && item !== null) {
+              const r = 'linha' in item && typeof item.linha === 'number'
+                ? item.linha
+                : ('row' in item && typeof item.row === 'number' ? item.row : undefined)
+              const c = 'coluna' in item && typeof item.coluna === 'number'
+                ? item.coluna
+                : ('col' in item && typeof item.col === 'number' ? item.col : undefined)
+              if (r !== undefined && c !== undefined) {
+                list.push([r, c])
+              }
+            }
+          }
+          setSuggestedMoves(list)
+        }
+      }
+    } catch {
+      // Ignora falhas de rede na busca de sugestões
+    }
+  }
 
   const createGame = async () => {
     setLoading(true)
     setError('')
     setSelected(null)
+    setSuggestedMoves([])
     setMoves([])
     setGame(null)
+    setWhiteTime(600)
+    setBlackTime(600)
+    setTimeExpired(null)
     try {
       const response = await fetch(API_URL, { method: 'POST' })
       setGame(await readGame(response))
@@ -203,6 +274,7 @@ function GamePage() {
     setLoading(true)
     setError('')
     setSelected(null)
+    setSuggestedMoves([])
     setPendingPromotion(null)
     try {
       const response = await fetch(`${API_URL}/${game.id}/lances`, {
@@ -235,7 +307,7 @@ function GamePage() {
   }
 
   const play = async (row: number, col: number) => {
-    if (!game || loading || pendingPromotion || game.status === 'XEQUE_MATE' || game.status === 'EMPATE' || (isAiGame && game.turnoAtual !== 'BRANCA')) return
+    if (!game || loading || pendingPromotion || gameOver || (isAiGame && game.turnoAtual !== 'BRANCA')) return
     const piece = game.tabuleiro[row][col]
     if (!selected) {
       if (!piece || piece.cor !== game.turnoAtual) {
@@ -244,10 +316,18 @@ function GamePage() {
       }
       setError('')
       setSelected([row, col])
+      void fetchSuggestedMoves(game.id, row, col)
       return
     }
     if (selected[0] === row && selected[1] === col) {
       setSelected(null)
+      setSuggestedMoves([])
+      return
+    }
+    if (piece && piece.cor === game.turnoAtual) {
+      setError('')
+      setSelected([row, col])
+      void fetchSuggestedMoves(game.id, row, col)
       return
     }
 
@@ -255,6 +335,7 @@ function GamePage() {
     const to: [number, number] = [row, col]
     const movingPiece = game.tabuleiro[from[0]][from[1]]
     setSelected(null)
+    setSuggestedMoves([])
     if (movingPiece?.tipo === 'PEAO' && (row === 0 || row === 7)) {
       setPendingPromotion({
         from,
@@ -265,8 +346,7 @@ function GamePage() {
     void submitMove(from, to)
   }
 
-  const aiTurnPending = isAiGame && game?.status !== 'XEQUE_MATE' && game?.status !== 'EMPATE' && game?.turnoAtual === 'PRETA'
-  const gameOver = game?.status === 'XEQUE_MATE' || game?.status === 'EMPATE'
+  const aiTurnPending = isAiGame && !gameOver && game?.turnoAtual === 'PRETA'
 
   return (
     <main className="app-shell">
@@ -281,26 +361,52 @@ function GamePage() {
             </div>
             <button className="new-game" onClick={() => void createGame()} disabled={loading}>↻ <span>Nova partida</span></button>
           </div>
+          {isCheckmate && (
+            <div className="game-over-banner" role="alert">
+              <div className="game-over-title">Fim de jogo</div>
+              <div className="game-over-subtitle">
+                {game?.turnoAtual === 'BRANCA'
+                  ? (isAiGame ? 'Você tomou xeque-mate! Vitória do Minimax.' : 'Xeque-mate! Vitória das Pretas.')
+                  : (isAiGame ? 'Xeque-mate! Você venceu a IA.' : 'Xeque-mate! Vitória das Brancas.')}
+              </div>
+            </div>
+          )}
+          {timeExpired && (
+            <div className="game-over-banner" role="alert">
+              <div className="game-over-title">Fim de jogo</div>
+              <div className="game-over-subtitle">
+                {timeExpired === 'BRANCA'
+                  ? (isAiGame ? 'Seu tempo esgotou! Vitória do Minimax.' : 'Tempo esgotado! Vitória das Pretas.')
+                  : (isAiGame ? 'Tempo do Minimax esgotou! Você venceu.' : 'Tempo esgotado! Vitória das Brancas.')}
+              </div>
+            </div>
+          )}
           <div className="board-frame">
             <div className="player-row">
               <div className="avatar black-avatar">♟</div>
               <div><strong>{isAiGame ? 'Minimax' : 'Jogador 2'}</strong><span>{isAiGame ? 'Inteligência artificial' : 'Jogador local'}</span></div>
-              <div className="clock"><small>PRETAS</small><b>10:00</b></div>
+              <div className={`clock ${game?.turnoAtual === 'PRETA' && !gameOver ? 'active-clock' : ''}`}>
+                <small>PRETAS</small>
+                <b>{formatClock(blackTime)}</b>
+              </div>
             </div>
             <div className="board-wrap">
               <div className="rank-labels">{[8, 7, 6, 5, 4, 3, 2, 1].map((rank) => <span key={rank}>{rank}</span>)}</div>
               <div className="board">
                 {game?.tabuleiro.map((boardRow, rowIndex) => boardRow.map((boardPiece, colIndex) => {
                   const isSelected = selected?.[0] === rowIndex && selected?.[1] === colIndex
+                  const isSuggested = suggestedMoves.some(([r, c]) => r === rowIndex && c === colIndex)
                   return (
                     <button
                       key={`${rowIndex}-${colIndex}`}
-                      className={`square ${(rowIndex + colIndex) % 2 ? 'dark' : 'light'} ${isSelected ? 'selected' : ''}`}
+                      className={`square ${(rowIndex + colIndex) % 2 ? 'dark' : 'light'} ${isSelected ? 'selected' : ''} ${isSuggested ? 'suggested' : ''}`}
                       onClick={() => void play(rowIndex, colIndex)}
                       disabled={loading || !game || gameOver || Boolean(pendingPromotion) || (isAiGame && game.turnoAtual !== 'BRANCA')}
-                      aria-label={`${files[colIndex]}${8 - rowIndex}`}
+                      aria-label={`${files[colIndex]}${8 - rowIndex}${isSuggested ? ' (movimento sugerido)' : ''}`}
                     >
                       {boardPiece && <span className={`piece ${boardPiece.cor === 'BRANCA' ? 'white-piece' : 'black-piece'}`}>{symbols[boardPiece.cor][boardPiece.tipo]}</span>}
+                      {isSuggested && !boardPiece && <span className="move-hint-dot" aria-hidden="true" />}
+                      {isSuggested && boardPiece && <span className="move-hint-capture" aria-hidden="true" />}
                     </button>
                   )
                 })) ?? Array.from({ length: 64 }, (_, index) => <span key={index} className="square" />)}
@@ -310,7 +416,10 @@ function GamePage() {
             <div className="player-row bottom-player">
               <div className="avatar white-avatar">♙</div>
               <div><strong>Você</strong><span>{isAiGame ? 'Jogador' : 'Jogador 1'}</span></div>
-              <div className="clock active-clock"><small>BRANCAS</small><b>10:00</b></div>
+              <div className={`clock ${game?.turnoAtual === 'BRANCA' && !gameOver ? 'active-clock' : ''}`}>
+                <small>BRANCAS</small>
+                <b>{formatClock(whiteTime)}</b>
+              </div>
             </div>
           </div>
           {pendingPromotion && game && (
@@ -345,15 +454,33 @@ function GamePage() {
             <button className="new-game retry-ai" onClick={() => void playAiMove(game!)}>Tentar resposta da IA</button>
           )}
           {loading && <p className="game-feedback" role="status">{aiThinking ? 'A IA está pensando…' : 'Atualizando partida…'}</p>}
-          {gameOver && <p className="game-feedback" role="status">{game?.status === 'XEQUE_MATE' ? 'Xeque-mate.' : 'Empate.'}</p>}
-          {game?.status === 'XEQUE' && <p className="game-feedback" role="status">Xeque!</p>}
+          {gameOver && (
+            <p className="game-feedback" role="status">
+              <strong>Fim de jogo: </strong>
+              {isCheckmate ? 'Xeque-mate.' : isStalemate ? 'Empate.' : 'Tempo esgotado.'}
+            </p>
+          )}
+          {game?.status === 'XEQUE' && !gameOver && <p className="game-feedback" role="status">Xeque!</p>}
           {error && <div className="error-message" role="alert">! {error}</div>}
         </section>
         <aside className="side-panel">
           <div className="turn-card">
             <div className={`turn-indicator ${game?.turnoAtual === 'PRETA' ? 'turn-black' : ''}`} />
-            <div><span>VEZ DE JOGAR</span><strong>{game?.turnoAtual === 'PRETA' ? (isAiGame ? 'Minimax' : 'Pretas') : 'Brancas'}</strong></div>
-            <div className="status-pill">{game?.status === 'EM_ANDAMENTO' ? 'Ao vivo' : game?.status ?? 'Carregando'}</div>
+            <div>
+              <span>{gameOver ? 'PARTIDA ENCERRADA' : 'VEZ DE JOGAR'}</span>
+              <strong>{gameOver ? 'Fim de jogo' : (game?.turnoAtual === 'PRETA' ? (isAiGame ? 'Minimax' : 'Pretas') : 'Brancas')}</strong>
+            </div>
+            <div className={`status-pill ${gameOver ? 'status-game-over' : ''}`}>
+              {isCheckmate
+                ? 'Fim de jogo (Xeque-mate)'
+                : isStalemate
+                ? 'Fim de jogo (Empate)'
+                : timeExpired
+                ? 'Fim de jogo (Tempo)'
+                : game?.status === 'EM_ANDAMENTO'
+                ? 'Ao vivo'
+                : game?.status ?? 'Carregando'}
+            </div>
           </div>
           <div className="panel-section">
             <div className="section-heading"><h2>Movimentos</h2><span>{moves.length}</span></div>
