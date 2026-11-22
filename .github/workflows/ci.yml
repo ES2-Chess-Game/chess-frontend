@@ -105,3 +105,28 @@ jobs:
       - run: npm ci
       - run: npm run lint
       - run: npm run build
+      - uses: actions/checkout@v7
+        with:
+          repository: ES2-Chess-Game/chess-backend
+          ref: fa1efb0827293c225427dbb35b048cde148c7f5d
+          path: system-backend
+          persist-credentials: false
+      - uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: 25
+      - name: Instala o Chromium para os testes de sistema
+        run: npx playwright install --with-deps chromium
+      - name: Testa a partida no navegador com a API real
+        timeout-minutes: 7
+        run: |
+          set -euo pipefail
+          (cd system-backend && ./gradlew --no-daemon bootJar)
+          java -jar system-backend/build/libs/*SNAPSHOT.jar --server.address=127.0.0.1 --server.port=8080 > "$RUNNER_TEMP/chess-api.log" 2>&1 &
+          api_pid=$!
+          trap 'kill "$api_pid" 2>/dev/null || true' EXIT
+          if ! curl --silent --fail --retry 25 --retry-connrefused --retry-delay 1 --max-time 2 http://127.0.0.1:8080/api/avatares > /dev/null; then
+            tail -60 "$RUNNER_TEMP/chess-api.log"
+            exit 1
+          fi
+          npm run test:e2e
