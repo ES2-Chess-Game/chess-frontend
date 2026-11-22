@@ -1,29 +1,39 @@
+import { useState } from 'react'
 import { Link } from 'react-router-dom'
+import AiIcon from '../components/AiIcon'
+import MoveClockField from '../components/MoveClockField'
+import { aiLevels, useGameCapabilities } from '../gameCapabilities'
+import type { ClockSetting } from '../moveClock'
 
 export default function Difficulty() {
-  return (
-    <main id="conteudo" tabIndex={-1} className="page difficulty">
-      <Link className="back-link" to="/">← Modos de jogo</Link>
-      <p className="eyebrow">Contra a máquina</p>
-      <h1>Escolha o nível</h1>
-      <p className="intro">Você joga com as brancas. O Minimax responde com as pretas.</p>
+  const [clockSetting, setClockSetting] = useState<ClockSetting>('0')
+  const capabilities = useGameCapabilities()
+  const time = clockSetting === '0' ? '' : `&time=${clockSetting}`
 
-      <ul className="level-list">
-        <li>
-          <Link className="mode-link mode-primary" to="/game?mode=ai&level=1">
-            <span className="level-number" aria-hidden="true">01</span>
-            <span><strong>Básico</strong><small>Começar uma partida</small></span>
-            <span className="mode-arrow" aria-hidden="true">↗</span>
-          </Link>
-        </li>
-        <li className="level-unavailable">
-          <span className="level-number" aria-hidden="true">02</span>
-          <strong>Intermediário</strong><span>Em breve</span>
-        </li>
-        <li className="level-unavailable">
-          <span className="level-number" aria-hidden="true">03</span>
-          <strong>Avançado</strong><span>Em breve</span>
-        </li>
+  return (
+    <main id="conteudo" tabIndex={-1} className="page setup-page">
+      <Link className="back-link" to="/">← Modos de jogo</Link>
+      <h1 className="ai-heading"><AiIcon />Escolha o nível</h1>
+
+      <div className="setup-form">
+        <MoveClockField value={clockSetting} onChange={setClockSetting} />
+      </div>
+      <ul className="level-list" aria-busy={capabilities === null}>
+        {aiLevels.map(level => capabilities?.niveisIa.includes(level.id) ? (
+          <li key={level.id}>
+            <Link
+              className={`mode-link${level.id === 'EASY' ? ' mode-primary' : ''}`}
+              to={`/game?mode=ai&difficulty=${level.id}${time}`}
+            >
+              <strong>{level.label}</strong>
+              <span className="mode-arrow" aria-hidden="true">↗</span>
+            </Link>
+          </li>
+        ) : (
+          <li key={level.id} className="level-unavailable">
+            <strong>{level.label}</strong><span>{capabilities ? 'Indisponível' : 'Carregando'}</span>
+          </li>
+        ))}
       </ul>
     </main>
   )

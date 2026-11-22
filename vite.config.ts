@@ -1,7 +1,7 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 
-const backend = 'http://127.0.0.1:8080'
+const backend = process.env.CHESS_API_URL ?? 'http://127.0.0.1:8080'
 
 export default defineConfig({
   plugins: [react()],

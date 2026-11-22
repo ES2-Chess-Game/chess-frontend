@@ -1,4 +1,5 @@
 import { Link } from 'react-router-dom'
+import AiIcon from '../components/AiIcon'
 
 const opening = [
   '♜♞♝♛♚♝♞♜',
@@ -34,18 +35,18 @@ export default function Home() {
     <main id="conteudo" tabIndex={-1} className="page home">
       <div className="home-copy">
         <p className="eyebrow">Nova partida</p>
-        <h1>O tabuleiro<br />é seu.</h1>
-        <p className="intro">Jogue com alguém no mesmo dispositivo ou desafie o Minimax.</p>
+        <h1>Acha que tem moral pra encarar o Arnold Schwarzenegger?</h1>
+        <p className="intro">Jogue com algum amigo ou desafie a IA do grupo 8 :)</p>
 
         <nav className="menu-options" aria-label="Modos de jogo">
-          <Link className="mode-link mode-primary" to="/game">
+          <Link className="mode-link mode-primary" to="/local">
             <span className="mode-symbol" aria-hidden="true">♟</span>
             <span><strong>Jogar localmente</strong><small>Duas pessoas, um tabuleiro</small></span>
             <span className="mode-arrow" aria-hidden="true">↗</span>
           </Link>
-          <Link className="mode-link" to="/difficulty">
-            <span className="mode-symbol" aria-hidden="true">♞</span>
-            <span><strong>Jogar contra a máquina</strong><small>Pratique com o Minimax</small></span>
+          <Link className="mode-link mode-ai" to="/difficulty">
+            <AiIcon />
+            <span><strong>Desafiar a IA</strong><small>Pratique com o Exterminador do Futuro</small></span>
             <span className="mode-arrow" aria-hidden="true">↗</span>
           </Link>
         </nav>
