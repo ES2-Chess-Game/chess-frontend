@@ -4,6 +4,7 @@ import Home from './pages/Home'
 import Difficulty from './pages/Difficulty'
 import LocalSetup from './pages/LocalSetup'
 import Game from './pages/Game'
+import History from './pages/History'
 import './App.css'
 
 function App() {
@@ -16,6 +17,7 @@ function App() {
         <Route path="/local" element={<LocalSetup />} />
         <Route path="/difficulty" element={<Difficulty />} />
         <Route path="/game" element={<Game />} />
+        <Route path="/historico/:id?" element={<History />} />
       </Routes>
     </>
   )

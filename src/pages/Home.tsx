@@ -1,5 +1,8 @@
+import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import AiIcon from '../components/AiIcon'
+import { gameApi, useGameCapabilities } from '../gameCapabilities'
+import { resumeGameUrl, type SavedGame } from '../savedGame'
 
 const opening = [
   '♜♞♝♛♚♝♞♜',
@@ -31,6 +34,23 @@ function OpeningBoard() {
 }
 
 export default function Home() {
+  const capabilities = useGameCapabilities()
+  const [resume, setResume] = useState<SavedGame | null>(null)
+  const canResume = capabilities?.partidasPersistentes === true
+
+  useEffect(() => {
+    if (!canResume) return
+    const controller = new AbortController()
+    void fetch(`${gameApi}/em-andamento`, { signal: controller.signal })
+      .then(async response => {
+        if (!response.ok) return
+        const game = await response.json() as SavedGame
+        if (!controller.signal.aborted) setResume(game)
+      })
+      .catch(() => {})
+    return () => controller.abort()
+  }, [canResume])
+
   return (
     <main id="conteudo" tabIndex={-1} className="page home">
       <div className="home-copy">
@@ -49,6 +69,12 @@ export default function Home() {
             <span><strong>Desafiar a IA</strong><small>Pratique com o Exterminador do Futuro</small></span>
             <span className="mode-arrow" aria-hidden="true">↗</span>
           </Link>
+          {canResume && (
+            <div className="saved-game-links">
+              {resume && <Link className="back-link" to={resumeGameUrl(resume)}>Retomar partida</Link>}
+              <Link className="back-link" to="/historico">Ver histórico</Link>
+            </div>
+          )}
         </nav>
       </div>
       <OpeningBoard />

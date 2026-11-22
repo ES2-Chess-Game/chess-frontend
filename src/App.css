@@ -371,3 +371,6 @@ button, a { touch-action: manipulation; }
   .board-frame { --coord: .85rem; }
   .rank-labels, .file-labels { font-size: .58rem; }
 }
+
+.saved-game-links { display: flex; flex-wrap: wrap; gap: 0 1rem; }
+.saved-game-links .back-link { margin-bottom: 0; }

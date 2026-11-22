@@ -9,9 +9,9 @@ export const aiLevels = [
 ] as const
 
 export type AiDifficulty = (typeof aiLevels)[number]['id']
-type Capabilities = { niveisIa: AiDifficulty[]; sugestoesDeLances: boolean }
+type Capabilities = { niveisIa: AiDifficulty[]; sugestoesDeLances: boolean; partidasPersistentes: boolean }
 
-const basicCapabilities: Capabilities = { niveisIa: ['EASY'], sugestoesDeLances: false }
+const basicCapabilities: Capabilities = { niveisIa: ['EASY'], sugestoesDeLances: false, partidasPersistentes: false }
 
 export function readAiDifficulty(value: string | null) {
   return aiLevels.find(level => level.id === value) ?? aiLevels[0]
@@ -33,6 +33,7 @@ export function useGameCapabilities() {
           available = {
             niveisIa: aiLevels.filter(level => supported.includes(level.id)).map(level => level.id),
             sugestoesDeLances: data?.sugestoesDeLances === true,
+            partidasPersistentes: data?.partidasPersistentes === true,
           }
         }
       } catch {
