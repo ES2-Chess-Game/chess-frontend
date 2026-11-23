@@ -1,0 +1,6 @@
+Imagens dos avatares: peças de xadrez de Colin M.L. Burnett (Cburnett),
+obtidas no Wikimedia Commons (Chess_[kqrbnp]dt45.svg).
+Licença: Creative Commons Atribuição-CompartilhaIgual 3.0 (CC BY-SA 3.0)
+https://creativecommons.org/licenses/by-sa/3.0/
+https://commons.wikimedia.org/wiki/User:Cburnett
+Os arquivos foram apenas renomeados (king, queen, rook, bishop, knight, pawn).
