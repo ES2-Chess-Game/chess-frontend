@@ -50,3 +50,15 @@ export function resumeGameUrl(game: SavedGame) {
   if (settings?.tempo && settings.tempo !== '0') query.set('time', settings.tempo)
   return `/game?${query}`
 }
+
+const gameStatuses: Record<string, string> = {
+  XEQUE_MATE: 'Xeque-mate', EMPATE: 'Empate', TEMPO_ESGOTADO: 'Tempo esgotado', DESISTENCIA: 'Desistência',
+}
+export const gameDate = new Intl.DateTimeFormat('pt-BR', { dateStyle: 'short', timeStyle: 'short' })
+
+export function gameResult(game: SavedGame) {
+  const winner = game.vencedor === 'BRANCA'
+    ? game.configuracao?.brancas || 'Brancas'
+    : game.configuracao?.pretas || (game.configuracao?.modo === 'ai' ? 'IA' : 'Pretas')
+  return [gameStatuses[game.status], game.vencedor && `Vitória · ${winner}`].filter(Boolean).join(' · ')
+}

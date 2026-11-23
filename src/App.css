@@ -43,6 +43,8 @@ button, a { touch-action: manipulation; }
   min-height: 4.5rem;
   display: flex;
   align-items: center;
+  justify-content: space-between;
+  gap: .75rem;
 }
 
 .brand {
@@ -374,3 +376,85 @@ button, a { touch-action: manipulation; }
 
 .saved-game-links { display: flex; flex-wrap: wrap; gap: 0 1rem; }
 .saved-game-links .back-link { margin-bottom: 0; }
+
+.account-link {
+  display: inline-flex;
+  align-items: center;
+  gap: .4rem;
+  min-height: 2.75rem;
+  color: var(--green);
+  font-size: .9rem;
+  font-weight: 700;
+  text-underline-offset: .18em;
+}
+
+.account-link .avatar-mark { width: 1.9rem; }
+.avatar-mark {
+  display: grid;
+  flex: none;
+  width: 3rem;
+  aspect-ratio: 1;
+  place-items: center;
+  border: 1px solid var(--line);
+  border-radius: .48rem;
+  background: var(--surface);
+  font: 1.4rem/1 'Apple Symbols', 'Segoe UI Symbol', serif;
+}
+.avatar-mark img { display: block; width: 76%; height: auto; }
+
+.account-page { max-width: 58rem; padding-block: clamp(2rem, 6vw, 4rem); }
+.account-page > .setup-form { max-width: 29rem; }
+.profile-layout {
+  display: grid;
+  grid-template-columns: minmax(0, .9fr) minmax(0, 1.1fr);
+  align-items: start;
+  gap: clamp(1.6rem, 5vw, 3rem);
+  margin-top: 1.7rem;
+}
+.profile-section { min-width: 0; padding-block: 1.1rem; border-top: 1px solid var(--line); }
+.profile-section h2 { margin: 0; font: 1.5rem var(--serif); overflow-wrap: anywhere; }
+.profile-identity { display: flex; align-items: center; gap: .8rem; }
+.profile-identity > div { min-width: 0; }
+.profile-identity .muted { margin-top: .25rem; overflow-wrap: anywhere; }
+.profile-section .back-link { margin: .45rem 0 0; }
+.profile-section .mode-link { min-height: 3.4rem; }
+.avatar-options { min-inline-size: 0; margin: 0; padding: 0; border: 0; }
+.avatar-options legend { margin-bottom: .5rem; font-size: .9rem; font-weight: 650; }
+.avatar-options > div { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: .45rem; }
+.avatar-options label {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  justify-items: center;
+  gap: .25rem;
+  padding: .45rem .2rem;
+  border: 1px solid var(--line);
+  border-radius: .45rem;
+  background: var(--surface);
+  font-size: .76rem;
+  cursor: pointer;
+}
+.avatar-options input { accent-color: var(--green); margin: 0; }
+.avatar-options label:has(input:checked) { border-color: var(--green); background: #eaf0e7; }
+.avatar-options .avatar-mark { width: 1.85rem; border: 0; background: none; }
+
+@media (max-width: 42rem) {
+  .profile-layout { grid-template-columns: minmax(0, 1fr); }
+}
+
+.profile-results { margin-block: 1rem; }
+.profile-results h3 { margin: 0; font-size: .95rem; }
+.profile-results dl {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: .5rem;
+  margin: .5rem 0 0;
+}
+.profile-results dl > div {
+  padding: .6rem .25rem;
+  border: 1px solid var(--line);
+  border-radius: .5rem;
+  text-align: center;
+}
+.profile-results dt { font-size: .82rem; }
+.profile-results dd { margin: .15rem 0 0; font-weight: 700; }
