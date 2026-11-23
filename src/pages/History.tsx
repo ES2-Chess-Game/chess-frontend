@@ -1,19 +1,8 @@
 import { useEffect, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { gameApi } from '../gameCapabilities'
-import { savedMoveText, type SavedGame } from '../savedGame'
-
-const results: Record<string, string> = {
-  XEQUE_MATE: 'Xeque-mate', EMPATE: 'Empate', TEMPO_ESGOTADO: 'Tempo esgotado', DESISTENCIA: 'Desistência',
-}
-const formatDate = new Intl.DateTimeFormat('pt-BR', { dateStyle: 'short', timeStyle: 'short' })
-
-function result(game: SavedGame) {
-  const winner = game.vencedor === 'BRANCA'
-    ? game.configuracao?.brancas || 'Brancas'
-    : game.configuracao?.pretas || (game.configuracao?.modo === 'ai' ? 'IA' : 'Pretas')
-  return [results[game.status], game.vencedor && `Vitória · ${winner}`].filter(Boolean).join(' · ')
-}
+import { gameDate, gameResult, savedMoveText, type SavedGame } from '../savedGame'
+import GameHistoryList from '../components/GameHistoryList'
 
 function HistoryContent() {
   const { id } = useParams()
@@ -22,7 +11,7 @@ function HistoryContent() {
 
   useEffect(() => {
     const controller = new AbortController()
-    void fetch(`${gameApi}/historico${id ? `/${encodeURIComponent(id)}` : ''}`, { signal: controller.signal })
+    void fetch(`${gameApi}/historico${id ? `/${encodeURIComponent(id)}` : '?resumo=true'}`, { signal: controller.signal })
       .then(async response => {
         if (!response.ok) throw new Error()
         const data = await response.json() as SavedGame | SavedGame[]
@@ -43,26 +32,12 @@ function HistoryContent() {
       {error && <p className="error-message" role="alert">Histórico indisponível</p>}
       {!error && !games && <p className="muted" role="status">Carregando partidas</p>}
       {games?.length === 0 && <p className="muted">Nenhuma partida encerrada ainda</p>}
-      {games && !id && (
-        <ul className="level-list">
-          {games.map(item => (
-            <li key={item.id}>
-              <Link className="mode-link history-link" to={`/historico/${item.id}`}>
-                <span>
-                  <strong>{result(item)}</strong>
-                  <small>{item.encerradaEm && formatDate.format(item.encerradaEm)}</small>
-                </span>
-                <span className="mode-arrow" aria-hidden="true">↗</span>
-              </Link>
-            </li>
-          ))}
-        </ul>
-      )}
+      {games && !id && <GameHistoryList games={games} />}
       {game && (
         <section className="setup-form" aria-label="Lances da partida">
           <div>
-            <strong>{result(game)}</strong>
-            {game.encerradaEm && <p className="muted">{formatDate.format(game.encerradaEm)}</p>}
+            <strong>{gameResult(game)}</strong>
+            {game.encerradaEm && <p className="muted">{gameDate.format(game.encerradaEm)}</p>}
           </div>
           {game.lances?.length
             ? <ol className="move-list">{game.lances.map((move, index) => <li key={index}>{savedMoveText(move)}</li>)}</ol>
