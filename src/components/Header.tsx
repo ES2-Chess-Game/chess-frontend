@@ -2,16 +2,12 @@ import { Link } from 'react-router-dom'
 
 export default function Header() {
   return (
-    <header className="topbar">
-      <Link to="/" style={{ textDecoration: 'none', display: 'flex', alignItems: 'center', gap: '12px', color: 'inherit' }}>
-        <div className="brand-mark">♞</div>
-        <div>
-          <strong>Clube 64</strong>
-          <span>arena de xadrez</span>
-        </div>
-      </Link>
-      <div className="topbar-meta">
-        <span className="live-dot" /> partida local <span className="profile">G8</span>
+    <header className="site-header">
+      <div className="site-header-inner">
+        <Link to="/" className="brand" aria-label="Clube 64, início">
+          <span className="brand-mark" aria-hidden="true">♞</span>
+          <span>Clube <strong>64</strong></span>
+        </Link>
       </div>
     </header>
   )
