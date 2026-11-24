@@ -1,4 +1,9 @@
 import { expect, test, type Page } from '@playwright/test'
+import { criarSessao } from './sessao'
+
+test.beforeEach(async ({ page }) => {
+  await criarSessao(page.request)
+})
 
 const square = (page: Page, position: string) =>
   page.getByRole('button', { name: new RegExp(`^${position}, `) })
@@ -261,7 +266,9 @@ test.describe('partidas persistentes', () => {
 
     const other = await browser.newContext()
     try {
-      const response = await other.request.get(new URL('/api/partidas/historico', page.url()).toString())
+      const origin = new URL(page.url()).origin
+      await criarSessao(other.request, origin)
+      const response = await other.request.get(origin + '/api/partidas/historico')
       expect(await response.json()).toEqual([])
     } finally {
       await other.close()
