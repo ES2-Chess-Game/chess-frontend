@@ -1,24 +1,15 @@
-import { useEffect, useState, type FormEvent } from 'react'
-import { apiRequest, jsonRequest, type Avatar, type Profile } from '../account'
-import AvatarIcon from './AvatarIcon'
+import { useState, type FormEvent } from 'react'
+import { apiRequest, jsonRequest, type Profile } from '../account'
+import AvatarPicker from './AvatarPicker'
 
 export default function ProfileEditor({ profile, onSave, onCancel }: {
   profile: Profile
   onSave: (profile: Profile) => void
   onCancel: () => void
 }) {
-  const [avatars, setAvatars] = useState<Avatar[]>([])
   const [avatarId, setAvatarId] = useState(profile.avatar?.id ?? null)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
-
-  useEffect(() => {
-    const controller = new AbortController()
-    void apiRequest<Avatar[]>('/api/avatares', { signal: controller.signal })
-      .then(items => { if (!controller.signal.aborted) setAvatars(items) })
-      .catch(() => { if (!controller.signal.aborted) setError('Catálogo de avatares indisponível') })
-    return () => controller.abort()
-  }, [])
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
@@ -49,20 +40,7 @@ export default function ProfileEditor({ profile, onSave, onCancel }: {
         E-mail
         <input name="email" type="email" autoComplete="email" defaultValue={profile.email} required maxLength={254} />
       </label>
-      {avatars.length > 0 && (
-        <fieldset className="avatar-options">
-          <legend>Avatar</legend>
-          <div>
-            {avatars.map(avatar => (
-              <label key={avatar.id}>
-                <input type="radio" name="avatar" checked={avatarId === avatar.id} onChange={() => setAvatarId(avatar.id)} />
-                <AvatarIcon avatar={avatar} />
-                {avatar.name}
-              </label>
-            ))}
-          </div>
-        </fieldset>
-      )}
+      <AvatarPicker value={avatarId} onChange={setAvatarId} disabled={saving} />
       {error && <p className="error-message" role="alert">{error}</p>}
       <div className="action-buttons">
         <button className="button-primary" disabled={saving}>{saving ? 'Salvando' : 'Salvar perfil'}</button>
