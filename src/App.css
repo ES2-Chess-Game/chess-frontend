@@ -458,3 +458,30 @@ button, a { touch-action: manipulation; }
 }
 .profile-results dt { font-size: .82rem; }
 .profile-results dd { margin: .15rem 0 0; font-weight: 700; }
+
+.site-nav { display: flex; align-items: center; gap: clamp(.75rem, 3vw, 1.7rem); }
+.site-nav .account-link { min-height: 2.75rem; }
+.site-nav .account-link .avatar-mark { display: none; }
+
+.ranking-page > .muted { max-width: 42rem; }
+.ranking-table {
+  width: 100%;
+  margin-top: 1.5rem;
+  border-collapse: collapse;
+  font-variant-numeric: tabular-nums;
+}
+.ranking-table :is(th, td) {
+  padding: .65rem clamp(.25rem, 2vw, .8rem);
+  border-bottom: 1px solid var(--line);
+  text-align: right;
+}
+.ranking-table th:nth-child(2) { text-align: left; width: 100%; }
+.ranking-table thead { font-size: .85rem; color: var(--muted); }
+.ranking-player { display: flex; align-items: center; gap: .5rem; overflow-wrap: anywhere; }
+.ranking-player small { display: block; color: var(--green); }
+.ranking-player .avatar-mark { width: clamp(1.6rem, 5vw, 2.25rem); }
+.ranking-table .ranking-current { background: var(--surface); color: var(--green-deep); }
+
+@media (min-width: 36rem) {
+  .site-nav .account-link .avatar-mark { display: grid; }
+}

@@ -10,12 +10,15 @@ export default function Header({ session }: { session: Session }) {
           <span className="brand-mark" aria-hidden="true">♞</span>
           <span>Clube <strong>64</strong></span>
         </Link>
-        {(session.status === 'guest' || session.status === 'signed-in') && (
-          <Link to="/conta" className="account-link">
-            {session.status === 'signed-in' && <AvatarIcon avatar={session.account.avatar} />}
-            {session.status === 'signed-in' ? 'Meu perfil' : 'Entrar'}
-          </Link>
-        )}
+        <nav className="site-nav" aria-label="Navegação principal">
+          <Link to="/ranking" className="account-link">Ranking</Link>
+          {(session.status === 'guest' || session.status === 'signed-in') && (
+            <Link to="/conta" className="account-link">
+              {session.status === 'signed-in' && <AvatarIcon avatar={session.account.avatar} />}
+              {session.status === 'signed-in' ? 'Meu perfil' : 'Entrar'}
+            </Link>
+          )}
+        </nav>
       </div>
     </header>
   )
