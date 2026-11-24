@@ -17,6 +17,7 @@ test('cria conta, escolhe avatar e recupera a partida em outra sessão', async (
   await page.getByLabel('Nome de usuário').fill(username)
   await page.getByLabel('E-mail').fill(username + '@example.test')
   await page.getByLabel('Senha').fill(password)
+  await page.getByRole('radio', { name: 'Rainha' }).check()
   const registration = page.waitForResponse(response => response.url().endsWith('/api/auth/cadastro'))
   const login = page.waitForResponse(response => response.url().endsWith('/api/auth/login'))
   await page.getByRole('button', { name: 'Criar conta' }).click()
@@ -24,6 +25,9 @@ test('cria conta, escolhe avatar e recupera a partida em outra sessão', async (
   expect((await login).status()).toBe(200)
   await expect(page.getByRole('heading', { name: 'Meu perfil' })).toBeVisible()
   await expect(page.getByText('Nenhuma partida encerrada ainda')).toBeVisible()
+  if (resources.ranking) {
+    await expect(page.locator('.profile-identity img')).toHaveAttribute('src', '/avatares/queen.svg')
+  }
 
   await page.getByRole('button', { name: 'Editar perfil' }).click()
   await page.getByLabel('Nome de usuário').fill(updated)
@@ -55,7 +59,7 @@ test('cria conta, escolhe avatar e recupera a partida em outra sessão', async (
   try {
     const base = page.url()
     const detailApi = new URL('/api/partidas' + historyPath, base).href
-    expect((await secondSession.request.get(detailApi)).status()).toBe(404)
+    expect((await secondSession.request.get(detailApi)).status()).toBe(resources.ranking ? 401 : 404)
     await secondSession.goto(new URL('/conta', base).href)
     await secondSession.getByLabel('Nome de usuário').fill(updated)
     await secondSession.getByLabel('Senha').fill(password)
@@ -66,5 +70,38 @@ test('cria conta, escolhe avatar e recupera a partida em outra sessão', async (
     await expect(secondSession.getByRole('listitem').first()).toHaveText('e2 → e4')
   } finally {
     await secondSession.close()
+  }
+})
+
+test('redireciona os modos de jogo para o login e abre o ranking geral', async ({ page }) => {
+  await page.goto('/')
+  for (const name of ['Jogar localmente', 'Desafiar a IA']) {
+    await page.getByRole('link', { name }).click()
+    await expect(page).toHaveURL(/\/conta$/)
+    await expect(page.getByRole('heading', { name: 'Entrar no Clube 64' })).toBeVisible()
+    await page.getByRole('link', { name: /Modos de jogo/ }).click()
+  }
+  await page.goto('/game?mode=ai&difficulty=EASY')
+  await expect(page).toHaveURL(/\/conta$/)
+  await page.getByRole('button', { name: 'Criar conta' }).click()
+  const username = 'ranking-' + crypto.randomUUID().slice(0, 8)
+  await page.getByLabel('Nome de usuário').fill(username)
+  await page.getByLabel('E-mail').fill(username + '@example.test')
+  await page.getByLabel('Senha').fill('xadrez-' + crypto.randomUUID())
+  await page.getByRole('button', { name: 'Criar conta' }).click()
+  await expect(page).toHaveURL(/\/conta$/)
+  await page.getByRole('radio', { name: 'Rei' }).check()
+  await page.getByRole('button', { name: 'Criar conta' }).click()
+  await expect(page).toHaveURL(/\/game\?mode=ai&difficulty=EASY$/)
+  await expect(page.getByRole('button', { name: 'e2, peão branco' })).toBeVisible()
+  const resources = await (await page.request.get('/api/partidas/recursos')).json()
+  if (resources.ranking) {
+    await page.getByRole('link', { name: 'Ranking' }).click()
+    await expect(page.getByRole('heading', { name: 'Ranking do Clube 64' })).toBeVisible()
+    const row = page.getByRole('row').filter({ hasText: username })
+    await expect(row).toContainText('Você')
+    await expect(row.locator('img')).toHaveAttribute('src', '/avatares/king.svg')
+    await expect(row.getByRole('cell').last()).toHaveText('0')
+    expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(page.viewportSize()!.width)
   }
 })

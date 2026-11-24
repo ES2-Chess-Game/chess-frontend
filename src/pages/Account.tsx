@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useLocation, useNavigate, type Location } from 'react-router-dom'
 import { AccountRequestError, apiRequest, type Account, type Profile, type Session } from '../account'
 import AccountForm from '../components/AccountForm'
 import AvatarIcon from '../components/AvatarIcon'
@@ -120,12 +120,21 @@ export default function AccountPage({ session, onChange }: {
   session: Session
   onChange: (session: Session) => void
 }) {
+  const navigate = useNavigate()
+  const location = useLocation()
+  const from = (location.state as { from?: Location } | null)?.from
+
+  function signIn(account: Account) {
+    onChange({ status: 'signed-in', account })
+    if (from) void navigate(from, { replace: true, state: from.state })
+  }
+
   return (
     <main id="conteudo" tabIndex={-1} className="page account-page">
       <Link className="back-link" to="/">← Modos de jogo</Link>
       {session.status === 'loading' && <p className="muted" role="status">Consultando sessão</p>}
       {session.status === 'unavailable' && <h1>Conta indisponível</h1>}
-      {session.status === 'guest' && <AccountForm onSignIn={account => onChange({ status: 'signed-in', account })} />}
+      {session.status === 'guest' && <AccountForm onSignIn={signIn} continuingGame={!!from && from.pathname !== '/historico'} />}
       {session.status === 'signed-in' && (
         <AccountProfile
           key={session.account.id}

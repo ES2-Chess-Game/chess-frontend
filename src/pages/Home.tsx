@@ -33,10 +33,10 @@ function OpeningBoard() {
   )
 }
 
-export default function Home() {
+export default function Home({ signedIn }: { signedIn: boolean }) {
   const capabilities = useGameCapabilities()
   const [resume, setResume] = useState<SavedGame | null>(null)
-  const canResume = capabilities?.partidasPersistentes === true
+  const canResume = signedIn && capabilities?.partidasPersistentes === true
 
   useEffect(() => {
     if (!canResume) return
