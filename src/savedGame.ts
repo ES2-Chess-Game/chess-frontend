@@ -31,7 +31,9 @@ export type SavedMove = {
   promocao?: PieceType | null
   captura?: PieceType | null
 }
+export type BoardPiece = { tipo: PieceType; cor: PlayerColor }
 export type SavedGame = {
+  tabuleiro?: (BoardPiece | null)[][]
   id: string
   status: string
   vencedor?: PlayerColor | null
@@ -82,9 +84,20 @@ const gameStatuses: Record<string, string> = {
 }
 export const gameDate = new Intl.DateTimeFormat('pt-BR', { dateStyle: 'short', timeStyle: 'short' })
 
+export function historyGameUrl(id: string) {
+  return `/historico/${encodeURIComponent(id)}`
+}
+
+export function gameStatusText(game: SavedGame) {
+  return gameStatuses[game.status] ?? 'Partida encerrada'
+}
+
+export function gamePlayerName(game: SavedGame, color: PlayerColor) {
+  if (color === 'BRANCA') return game.configuracao?.brancas || 'Brancas'
+  return game.configuracao?.pretas || (game.configuracao?.modo === 'ai' ? 'Skynet' : 'Pretas')
+}
+
 export function gameResult(game: SavedGame) {
-  const winner = game.vencedor === 'BRANCA'
-    ? game.configuracao?.brancas || 'Brancas'
-    : game.configuracao?.pretas || (game.configuracao?.modo === 'ai' ? 'IA' : 'Pretas')
-  return [gameStatuses[game.status], game.vencedor && `Vitória · ${winner}`].filter(Boolean).join(' · ')
+  const result = game.vencedor ? `Vitória · ${gamePlayerName(game, game.vencedor)}` : undefined
+  return [gameStatusText(game), result].filter(Boolean).join(' · ')
 }

@@ -46,11 +46,12 @@ test('cria conta, escolhe avatar e recupera a partida em outra sessão', async (
   await expect(page.getByRole('listitem').first()).toHaveText('e2 → e4')
   await page.getByRole('button', { name: 'Desistir da partida' }).click()
   await page.getByRole('dialog').getByRole('button', { name: 'Desistir', exact: true }).click()
-  await expect(page.getByRole('status')).toHaveText('Desistência · A IA vence')
+  await expect(page).toHaveURL(/\/historico\/[^/]+$/)
+  await expect(page.getByRole('heading', { name: 'Vitória de Skynet' })).toBeVisible()
   await page.getByRole('link', { name: 'Meu perfil' }).click()
 
   await expect(page.getByRole('link', { name: 'Retomar partida' })).toHaveCount(0)
-  const finished = page.getByRole('link', { name: /Desistência · Vitória · IA/ })
+  const finished = page.getByRole('link', { name: /Desistência · Vitória · Skynet/ })
   const historyPath = await finished.getAttribute('href')
   expect(historyPath).toMatch(/^\/historico\//)
   await expect(page.getByText('Derrotas', { exact: true }).locator('..').locator('dd')).toHaveText('1')
@@ -68,7 +69,7 @@ test('cria conta, escolhe avatar e recupera a partida em outra sessão', async (
     await secondSession.getByRole('button', { name: 'Entrar', exact: true }).click()
     await expect(secondSession.locator('.profile-identity img')).toHaveAttribute('src', '/avatares/knight.svg')
     await secondSession.getByRole('link', { name: 'Ver histórico completo' }).click()
-    await secondSession.getByRole('link', { name: /Desistência · Vitória · IA/ }).click()
+    await secondSession.getByRole('link', { name: /Desistência · Vitória · Skynet/ }).click()
     await expect(secondSession.getByRole('listitem').first()).toHaveText('e2 → e4')
   } finally {
     await secondSession.close()

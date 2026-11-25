@@ -7,12 +7,13 @@ import MoveList from '../components/MoveList'
 import { gameApi, readAiDifficulty, useGameCapabilities } from '../gameCapabilities'
 import { clockDuration, formatClock, readClockSetting } from '../moveClock'
 import {
-  isFinished, pieceLabel, pieceSymbols as symbols, type PieceType, type PlayerColor as Color,
+  historyGameUrl, isFinished, pieceLabel, pieceSymbols as symbols, type BoardPiece,
+  type PieceType, type PlayerColor as Color,
   type SavedGame, type SavedMove,
 } from '../savedGame'
 
 type GameStatus = 'EM_ANDAMENTO' | 'XEQUE' | 'XEQUE_MATE' | 'EMPATE' | 'TEMPO_ESGOTADO' | 'DESISTENCIA'
-type Piece = { tipo: PieceType; cor: Color }
+type Piece = BoardPiece
 type Board = (Piece | null)[][]
 type Game = SavedGame & { tabuleiro: Board; turnoAtual: Color; status: GameStatus }
 type Square = [number, number]
@@ -145,7 +146,12 @@ function Match() {
   const [matchSeconds, setMatchSeconds] = useState<MatchTime | null>(null)
   const requests = useRef<AbortController | null>(null)
 
-  const beginTurn = useCallback((nextGame: Game, fallback?: SavedMove) => {
+  const beginTurn = useCallback((nextGame: Game, fallback?: SavedMove, openResult = true) => {
+    if (openResult && isFinished(nextGame) && nextGame.encerradaEm != null) {
+      allowNavigation.current = true
+      void navigate(historyGameUrl(nextGame.id), { replace: true })
+      return
+    }
     if (nextGame.lances) setMoves(nextGame.lances)
     else if (fallback) setMoves(current => [...current, fallback])
     const now = Date.now()
@@ -167,7 +173,7 @@ function Match() {
     } : null)
     setSecondsLeft(timed && !matchClock ? displaySeconds(budget) : null)
     setGame(nextGame)
-  }, [duration, matchClock])
+  }, [duration, matchClock, navigate])
 
   const finishMatch = useCallback((end: MatchEnd) => {
     requests.current?.abort()
@@ -198,11 +204,20 @@ function Match() {
 
     finishMatch({ reason: 'Tempo esgotado', loser: turnClock.color })
     if (game?.configuracao) {
-      // A consulta encerra o jogo também no servidor quando o relógio realmente zera
-      void fetch(`${gameApi}/${game.id}`).catch(() => {})
+      const controller = new AbortController()
+      requests.current = controller
+      const { signal } = controller
+      void fetch(`${gameApi}/${game.id}`, { signal })
+        .then(readGame)
+        .then(confirmed => {
+          if (!signal.aborted && isFinished(confirmed)) beginTurn(confirmed)
+        })
+        .catch(() => {
+          if (!signal.aborted) setError('Não foi possível confirmar o resultado com o servidor')
+        })
     }
     return true
-  }, [finishMatch, game])
+  }, [beginTurn, finishMatch, game])
 
   useEffect(() => {
     if (!duration) return
@@ -256,19 +271,13 @@ function Match() {
           }),
         })
       const nextGame = await readGame(response)
-      if (!signal.aborted) {
-        if (restore && isFinished(nextGame)) {
-          void navigate(`/historico/${encodeURIComponent(nextGame.id)}`, { replace: true })
-          return
-        }
-        beginTurn(nextGame)
-      }
+      if (!signal.aborted) beginTurn(nextGame)
     } catch (requestError) {
       if (!signal.aborted) setError(requestError instanceof Error ? requestError.message : 'Servidor indisponível')
     } finally {
       if (!signal.aborted) setLoading(false)
     }
-  }, [beginTurn, blackName, clockSetting, difficulty.id, duration, isAiGame, navigate, whiteName])
+  }, [beginTurn, blackName, clockSetting, difficulty.id, duration, isAiGame, whiteName])
 
   useEffect(() => {
     if (!levelAvailable) return
@@ -425,7 +434,7 @@ function Match() {
     void navigate(`/game?${params}`, { replace: true, state: { players } })
   }
 
-  async function endByResignation(loser: Color) {
+  async function endByResignation(loser: Color, openResult: boolean) {
     if (!game || gameOver || expireTurn()) return true
     if (!game.configuracao) {
       finishMatch({ reason: 'Desistência', loser })
@@ -440,7 +449,7 @@ function Match() {
       const response = await fetch(`${gameApi}/${game.id}/desistencia?cor=${loser}`, { method: 'POST', signal })
       const finished = await readGame(response)
       if (signal.aborted) return false
-      beginTurn(finished)
+      beginTurn(finished, undefined, openResult)
       setSelected(null)
       return true
     } catch (requestError) {
@@ -455,7 +464,7 @@ function Match() {
 
   async function resign() {
     if (!resigning || ending) return
-    await endByResignation(resigning)
+    await endByResignation(resigning, true)
     resignationDialog.current?.close()
   }
 
@@ -466,7 +475,7 @@ function Match() {
   }
 
   async function confirmDeparture() {
-    if (ending || !await endByResignation(isAiGame ? 'BRANCA' : turn)) return
+    if (ending || !await endByResignation(isAiGame ? 'BRANCA' : turn, false)) return
     setRestartRequested(false)
     if (blocker.state === 'blocked') blocker.proceed()
     else if (restartRequested) restart()
