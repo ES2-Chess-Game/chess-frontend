@@ -1,15 +1,22 @@
+/* Identidade Skynet */
 :root {
-  --ink: #253630;
-  --muted: #52635b;
-  --paper: #f5f3eb;
-  --surface: #fcfaf4;
-  --line: #d7dacf;
-  --green: #254c3e;
-  --green-deep: #19392e;
-  --board-light: #f0e5c7;
-  --board-dark: #78917d;
-  --focus: #9b4a17;
-  --serif: Georgia, 'Times New Roman', serif;
+  --ink: #f7eff1;
+  --muted: #c3afb5;
+  --paper: #100e11;
+  --surface: #201a1e;
+  --line: #4d3941;
+  --accent: #ff7d84;
+  --accent-fill: #cf293d;
+  --accent-hover: #ad182c;
+  --surface-hover: #38232a;
+  --board-frame: #20161b;
+  --board-light: #d5bcc0;
+  --board-dark: #97727a;
+  --board-active: #f19492;
+  --danger-bg: #411b24;
+  --focus: #ffc1be;
+  --heading: 'Arial Narrow', 'Bahnschrift', system-ui, sans-serif;
+  --mono: ui-monospace, 'SF Mono', Consolas, monospace;
 }
 
 a { color: inherit; }
@@ -26,7 +33,7 @@ button, a { touch-action: manipulation; }
   z-index: 2;
   padding: .6rem .9rem;
   border-radius: .35rem;
-  background: var(--green-deep);
+  background: var(--accent-fill);
   color: white;
   transform: translateY(-200%);
 }
@@ -53,19 +60,15 @@ button, a { touch-action: manipulation; }
   gap: .65rem;
   min-height: 2.75rem;
   text-decoration: none;
-  font: 1.3rem var(--serif);
+  font: 800 clamp(.95rem, 2.3vw, 1.18rem)/1.05 var(--mono);
+  letter-spacing: -.04em;
+  text-transform: uppercase;
+  white-space: nowrap;
 }
 
-.brand-mark {
-  display: grid;
-  width: 2.15rem;
-  aspect-ratio: 1;
-  place-items: center;
-  border-radius: .45rem;
-  background: var(--green);
-  color: var(--surface);
-  font: 1.45rem/1 'Apple Symbols', 'Segoe UI Symbol', serif;
-}
+.brand strong { color: var(--accent); }
+.brand-mark { display: block; flex: none; width: 2.15rem; height: auto; }
+
 
 .home {
   display: grid;
@@ -77,9 +80,8 @@ button, a { touch-action: manipulation; }
 
 .eyebrow {
   margin: 0 0 .8rem;
-  color: var(--green);
-  font-size: .75rem;
-  font-weight: 750;
+  color: var(--accent);
+  font: 750 .75rem var(--mono);
   letter-spacing: .13em;
   text-transform: uppercase;
 }
@@ -87,12 +89,13 @@ button, a { touch-action: manipulation; }
 .page h1 {
   margin: 0;
   color: var(--ink);
-  font: 400 clamp(2.2rem, 5.7vw, 4.6rem)/1.03 var(--serif);
+  font: 750 clamp(2.2rem, 5.7vw, 4.6rem)/1.04 var(--heading);
   letter-spacing: -.045em;
   text-wrap: balance;
 }
 
-.home h1 { font-size: clamp(2rem, 5vw, 4.5rem); }
+.home h1 { font-size: clamp(2.45rem, 5vw, 4.5rem); }
+.home h1 em { color: var(--accent); font-style: normal; }
 
 .intro {
   max-width: 35ch;
@@ -127,10 +130,10 @@ button, a { touch-action: manipulation; }
 .mode-link strong, .mode-link small { display: block; }
 .mode-link strong { font-size: 1rem; line-height: 1.3; }
 .mode-link small { margin-top: .2rem; color: var(--muted); font-size: .83rem; line-height: 1.35; }
-.mode-link:hover { border-color: var(--green); background: #eaf0e7; }
-.mode-primary { border-color: var(--green); background: var(--green); color: white; }
-.mode-primary small { color: #dce9df; }
-.mode-primary:hover { background: var(--green-deep); }
+.mode-link:hover { border-color: var(--accent); background: var(--surface-hover); }
+.mode-primary { border-color: var(--accent-fill); background: var(--accent-fill); color: white; }
+.mode-primary small { color: #fff0f1; }
+.mode-primary:hover { background: var(--accent-hover); }
 .mode-ai { grid-template-columns: clamp(4.25rem, 24%, 6rem) minmax(0, 1fr) auto; min-height: 5.25rem; }
 .mode-ai .ai-icon { width: 100%; }
 .mode-symbol { font: 1.65rem/1 'Apple Symbols', 'Segoe UI Symbol', serif; text-align: center; }
@@ -141,12 +144,13 @@ button, a { touch-action: manipulation; }
 .ai-heading .ai-icon { width: 1.25em; }
 
 .opening {
-  width: min(100%, 29rem);
+  width: min(100%, 32rem);
   margin: 0 auto;
   padding: clamp(.9rem, 3vw, 1.65rem);
   border-radius: .85rem;
-  background: var(--green-deep);
-  color: #f0eee1;
+  border: 1px solid var(--line);
+  background: var(--board-frame);
+  color: var(--ink);
 }
 
 .opening-grid, .board {
@@ -162,7 +166,7 @@ button, a { touch-action: manipulation; }
 .opening-square, .square { display: grid; min-width: 0; min-height: 0; place-items: center; }
 .light { background: var(--board-light); }
 .dark { background: var(--board-dark); }
-.opening-last { background: #d7b565; }
+.opening-last { background: var(--board-active); }
 
 .opening figcaption {
   display: flex;
@@ -173,7 +177,7 @@ button, a { touch-action: manipulation; }
 }
 
 .opening figcaption span:last-child {
-  color: #dce6d7;
+  color: var(--muted);
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
 }
@@ -199,7 +203,7 @@ button, a { touch-action: manipulation; }
   align-items: center;
   min-height: 2.75rem;
   margin-bottom: 1rem;
-  color: var(--green);
+  color: var(--accent);
   font-size: .9rem;
   font-weight: 650;
   text-underline-offset: .2em;
@@ -220,7 +224,7 @@ button, a { touch-action: manipulation; }
 }
 .level-unavailable span:last-child { font-size: .8rem; }
 
-.game-page { max-width: 62rem; padding-block: clamp(1rem, 3vw, 2.4rem) 3rem; }
+.game-page { width: min(100% - clamp(1rem, 6vw, 5rem), 81rem); padding-block: 1rem 3rem; }
 .game-heading { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: end; gap: .8rem 1rem; margin-bottom: 1.3rem; }
 .game-heading h1 { font-size: clamp(2.1rem, 5.1vw, 4.25rem); }
 .game-heading .eyebrow { margin-bottom: .4rem; }
@@ -232,22 +236,22 @@ button, a { touch-action: manipulation; }
   border: 1px solid var(--line);
   border-radius: .48rem;
   background: var(--surface);
-  color: var(--green);
+  color: var(--accent);
   font-size: .9rem;
   font-weight: 700;
   cursor: pointer;
 }
 
-.button-primary { border-color: var(--green); background: var(--green); color: white; }
-.button-primary:hover { background: var(--green-deep); }
-.button-secondary:not(:disabled):hover { background: #eaf0e7; border-color: var(--green); }
+.button-primary { border-color: var(--accent-fill); background: var(--accent-fill); color: white; }
+.button-primary:hover { background: var(--accent-hover); }
+.button-secondary:not(:disabled):hover { background: var(--surface-hover); border-color: var(--accent); }
 .button-secondary:disabled { opacity: .65; cursor: default; }
 
 .game-layout {
   display: grid;
-  grid-template-columns: minmax(0, 36rem) minmax(12rem, 1fr);
+  grid-template-columns: minmax(0, 49rem) minmax(11rem, 1fr);
   align-items: start;
-  gap: clamp(1.3rem, 4vw, 3rem);
+  gap: clamp(1rem, 3vw, 2.35rem);
 }
 
 .play-area { min-width: 0; }
@@ -263,7 +267,7 @@ button, a { touch-action: manipulation; }
   border: 1px solid var(--line);
   border-radius: .48rem .48rem 0 0;
   background: var(--surface);
-  color: var(--green-deep);
+  color: var(--ink);
   font-size: .89rem;
   font-weight: 700;
 }
@@ -274,58 +278,58 @@ button, a { touch-action: manipulation; }
   min-width: 3rem;
   padding: .18rem .4rem;
   border-radius: .3rem;
-  background: #e6eee5;
+  background: var(--surface-hover);
   text-align: center;
   font-variant-numeric: tabular-nums;
 }
 .match-clocks { display: flex; flex-wrap: wrap; gap: .4rem; }
 .match-clock { display: inline-flex; gap: .35rem; align-items: center; border: 1px solid transparent; font-size: .8rem; }
 .match-clock:not(.clock-active):not(.clock-warning) { background: var(--paper); }
-.clock-active { border-color: var(--green); }
-.clock-warning { background: #f5dfd5; color: #763329; }
+.clock-active { border-color: var(--accent); }
+.clock-warning { background: var(--danger-bg); color: #ffc1c2; }
 
-.turn-dot { flex: 0 0 .75rem; height: .75rem; border: 1px solid var(--green); border-radius: 50%; background: #fffdf4; }
-.turn-black { background: var(--green); }
+.turn-dot { flex: 0 0 .75rem; height: .75rem; border: 1px solid var(--accent); border-radius: 50%; background: #fff6f4; }
+.turn-black { background: var(--accent); }
 
 .board-frame {
   --coord: 1.2rem;
   padding: clamp(.3rem, 1vw, .7rem);
   border-radius: 0 0 .55rem .55rem;
-  background: var(--green-deep);
-  color: #e4ebdf;
+  background: var(--board-frame);
+  color: var(--muted);
 }
 
 .board-wrap { display: grid; grid-template-columns: var(--coord) minmax(0, 1fr); align-items: stretch; }
 .board { border-radius: .15rem; overflow: hidden; }
 .square { position: relative; border: 0; padding: 0; cursor: pointer; }
 .square[aria-disabled="true"] { cursor: default; }
-.square[aria-pressed="true"] { background: #dab664; box-shadow: inset 0 0 0 3px var(--green-deep); }
+.square[aria-pressed="true"] { background: var(--board-active); box-shadow: inset 0 0 0 3px #451421; }
 .square-suggested::after {
   position: absolute;
   width: 29%;
   aspect-ratio: 1;
   border-radius: 50%;
-  background: #19392e;
+  background: #31141b;
   opacity: .68;
   pointer-events: none;
   content: '';
 }
-.square-suggested:has(.piece)::after { inset: 3px; width: auto; border: 3px solid #9b4a17; background: transparent; opacity: 1; }
-.square:focus-visible { outline: 3px solid #853b11; outline-offset: -4px; z-index: 1; }
+.square-suggested:has(.piece)::after { inset: 3px; width: auto; border: 3px solid #351420; background: transparent; opacity: 1; }
+.square:focus-visible { outline: 3px solid #59101d; outline-offset: -4px; z-index: 1; }
 
 .piece {
   display: block;
   font-family: 'Apple Symbols', 'Segoe UI Symbol', 'DejaVu Sans', serif;
-  font-size: min(9cqi, 3.85rem);
+  font-size: 9cqi;
   line-height: 1;
 }
-.white-piece { color: #fff7de; text-shadow: 1px 1px #253630, -1px -1px #253630, -1px 1px #253630, 1px -1px #253630; }
-.black-piece { color: #172a22; }
+.white-piece { color: #fff6f4; text-shadow: 1px 1px #201218, -1px -1px #201218, -1px 1px #201218, 1px -1px #201218; }
+.black-piece { color: #1b141a; }
 
 .rank-labels, .file-labels { display: grid; font-size: .68rem; font-weight: 650; place-items: center; }
 .rank-labels { grid-template-rows: repeat(8, 1fr); }
 .file-labels { grid-template-columns: repeat(8, 1fr); margin-left: var(--coord); padding-top: .3rem; }
-.error-message { margin: .75rem 0 0; padding: .6rem .8rem; border-left: 3px solid #9c4c3b; background: #f4e1d8; color: #743629; font-size: .9rem; }
+.error-message { margin: .75rem 0 0; padding: .6rem .8rem; border-left: 3px solid var(--accent); background: var(--danger-bg); color: #ffc1c2; font-size: .9rem; }
 .game-retry { margin-top: .65rem; }
 
 .game-details { min-width: 0; border-top: 1px solid var(--line); }
@@ -340,35 +344,39 @@ button, a { touch-action: manipulation; }
   color: var(--ink);
 }
 
-.game-dialog::backdrop { background: rgba(21, 36, 29, .58); }
-.game-dialog h2 { margin: 0; font: 1.6rem var(--serif); }
+.game-dialog::backdrop { background: rgb(8 5 8 / .78); }
+.game-dialog h2 { margin: 0; font: 1.6rem var(--heading); }
 .game-dialog .muted { overflow-wrap: anywhere; }
 .action-buttons { display: flex; flex-wrap: wrap; gap: .6rem; margin-top: 1.2rem; }
 .promotion-actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
 .promotion-actions button { display: flex; align-items: center; gap: .4rem; }
 .promotion-symbol { font: 1.35rem/1 'Apple Symbols', 'Segoe UI Symbol', serif; }
 .promotion-cancel { margin-top: .75rem; }
-.button-danger { color: #853e30; }
-.button-danger:not(:disabled):hover { border-color: #853e30; background: #f5dfd5; }
-.game-details h2 { margin: 0; font: 1.35rem var(--serif); }
+.button-danger { color: var(--accent); }
+.button-danger:not(:disabled):hover { border-color: var(--accent); background: var(--danger-bg); }
+.game-details h2 { margin: 0; font: 1.35rem var(--heading); }
 .muted { margin: .7rem 0 0; color: var(--muted); font-size: .9rem; line-height: 1.6; }
 .detail-heading { display: flex; align-items: baseline; justify-content: space-between; gap: .8rem; }
 .detail-heading span { color: var(--muted); font-size: .85rem; font-variant-numeric: tabular-nums; }
 .move-list { max-height: 14rem; overflow-y: auto; margin: .5rem 0 0; padding-left: 1.5rem; font: .9rem/1.9 ui-monospace, monospace; }
 .move-list li { padding-left: .3rem; }
 
-@media (max-width: 48rem) {
+@media (max-width: 51rem) {
   .home { grid-template-columns: 1fr; padding-block: 2.5rem 3rem; }
   .opening { margin-inline: 0; }
   .game-layout { grid-template-columns: minmax(0, 1fr); }
-  .game-details { max-width: 36rem; }
+  .game-details { max-width: none; }
 }
 
 @media (max-width: 30rem) {
   .site-header-inner { min-height: 3.7rem; }
+  .brand { gap: .35rem; }
+  .brand-mark { width: 1.8rem; }
   .player-fields { grid-template-columns: 1fr; }
+  .game-page { width: calc(100% - 1rem); }
   .game-heading { align-items: start; flex-direction: column; }
   .game-heading h1 { text-wrap: wrap; }
+  .game-header-actions { flex-wrap: wrap; }
   .turn-bar:has(.match-clocks) { flex-wrap: wrap; }
   .board-frame { --coord: .85rem; }
   .rank-labels, .file-labels { font-size: .58rem; }
@@ -382,7 +390,7 @@ button, a { touch-action: manipulation; }
   align-items: center;
   gap: .4rem;
   min-height: 2.75rem;
-  color: var(--green);
+  color: var(--accent);
   font-size: .9rem;
   font-weight: 700;
   text-underline-offset: .18em;
@@ -400,7 +408,7 @@ button, a { touch-action: manipulation; }
   background: var(--surface);
   font: 1.4rem/1 'Apple Symbols', 'Segoe UI Symbol', serif;
 }
-.avatar-mark img { display: block; width: 76%; height: auto; }
+.avatar-mark img { display: block; width: 76%; height: auto; filter: invert(1); }
 
 .account-page { max-width: 58rem; padding-block: clamp(2rem, 6vw, 4rem); }
 .account-page > .setup-form { max-width: 29rem; }
@@ -412,7 +420,7 @@ button, a { touch-action: manipulation; }
   margin-top: 1.7rem;
 }
 .profile-section { min-width: 0; padding-block: 1.1rem; border-top: 1px solid var(--line); }
-.profile-section h2 { margin: 0; font: 1.5rem var(--serif); overflow-wrap: anywhere; }
+.profile-section h2 { margin: 0; font: 1.5rem var(--heading); overflow-wrap: anywhere; }
 .profile-identity { display: flex; align-items: center; gap: .8rem; }
 .profile-identity > div { min-width: 0; }
 .profile-identity .muted { margin-top: .25rem; overflow-wrap: anywhere; }
@@ -434,8 +442,8 @@ button, a { touch-action: manipulation; }
   font-size: .76rem;
   cursor: pointer;
 }
-.avatar-options input { accent-color: var(--green); margin: 0; }
-.avatar-options label:has(input:checked) { border-color: var(--green); background: #eaf0e7; }
+.avatar-options input { accent-color: var(--accent); margin: 0; }
+.avatar-options label:has(input:checked) { border-color: var(--accent); background: var(--surface-hover); }
 .avatar-options .avatar-mark { width: 1.85rem; border: 0; background: none; }
 
 @media (max-width: 42rem) {
@@ -478,10 +486,40 @@ button, a { touch-action: manipulation; }
 .ranking-table th:nth-child(2) { text-align: left; width: 100%; }
 .ranking-table thead { font-size: .85rem; color: var(--muted); }
 .ranking-player { display: flex; align-items: center; gap: .5rem; overflow-wrap: anywhere; }
-.ranking-player small { display: block; color: var(--green); }
+.ranking-player small { display: block; color: var(--accent); }
 .ranking-player .avatar-mark { width: clamp(1.6rem, 5vw, 2.25rem); }
-.ranking-table .ranking-current { background: var(--surface); color: var(--green-deep); }
+.ranking-table .ranking-current { background: var(--surface-hover); color: var(--ink); }
 
 @media (min-width: 36rem) {
   .site-nav .account-link .avatar-mark { display: grid; }
+}
+
+
+.capture-tray {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: .3rem .75rem;
+  min-height: 2.5rem;
+  padding: .35rem .75rem;
+  border: 1px solid var(--line);
+  background: var(--surface);
+}
+.capture-label { color: var(--muted); font: 650 .72rem var(--mono); }
+.capture-empty { color: var(--muted); font-size: .75rem; }
+.capture-pieces { display: inline-flex; flex-wrap: wrap; align-items: center; gap: .3rem; }
+.captured-piece, .move-capture {
+  font: 1.18rem/1.1 'Apple Symbols', 'Segoe UI Symbol', 'DejaVu Sans', serif;
+}
+.captured-piece.black-piece { background: var(--board-dark); border-radius: .15rem; }
+.captured-piece.white-piece { text-shadow: none; }
+.move-capture { margin-left: .4rem; color: var(--accent); vertical-align: middle; }
+.turn-ended { border-color: var(--accent); color: var(--accent); }
+
+@media (prefers-reduced-motion: no-preference) {
+  .turn-ended { animation: match-ended .3s ease-out; }
+  @keyframes match-ended {
+    from { background: var(--danger-bg); }
+    to { background: var(--surface); }
+  }
 }

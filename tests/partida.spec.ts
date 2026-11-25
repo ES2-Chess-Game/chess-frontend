@@ -249,6 +249,7 @@ test.describe('partidas persistentes', () => {
     await move(page, 'e2', 'e4')
     await expect(page.getByRole('status')).toHaveText('Vez de Rui · Pretas')
 
+    page.once('dialog', dialog => { void dialog.accept() })
     await page.goto('/')
     await page.getByRole('link', { name: 'Retomar partida' }).click()
     await expect(page.getByRole('status')).toHaveText('Vez de Rui · Pretas')
@@ -274,4 +275,60 @@ test.describe('partidas persistentes', () => {
       await other.close()
     }
   })
+})
+
+test('mostra as capturas dos dois lados no tabuleiro, nos lances e no histórico', async ({ page }) => {
+  await page.goto('/game')
+  const board = page.getByRole('group', { name: 'Tabuleiro de xadrez' })
+  await expect(square(page, 'e2')).toBeEnabled()
+  const width = (await board.boundingBox())!.width
+  expect(width).toBeGreaterThan(Math.min(700, page.viewportSize()!.width - 40))
+
+  for (const [from, to] of [['e2', 'e4'], ['d7', 'd5'], ['e4', 'd5'], ['d8', 'd5']]) {
+    await move(page, from, to)
+  }
+  await expect(page.getByRole('group', { name: 'Capturas das brancas' })
+    .getByRole('img', { name: 'peão preto' })).toBeVisible()
+  await expect(page.getByRole('group', { name: 'Capturas das pretas' })
+    .getByRole('img', { name: 'peão branco' })).toBeVisible()
+  await expect(page.getByRole('listitem').nth(2)
+    .getByRole('img', { name: 'Captura: peão preto' })).toBeVisible()
+  await expect(page.getByRole('listitem').nth(3)
+    .getByRole('img', { name: 'Captura: peão branco' })).toBeVisible()
+
+  await page.getByRole('button', { name: 'Desistir da partida' }).click()
+  await page.getByRole('dialog').getByRole('button', { name: 'Desistir', exact: true }).click()
+  await expect(page.getByRole('status')).toContainText('Desistência')
+  await page.getByRole('link', { name: 'Skynet Chess, início' }).click()
+  await page.getByRole('link', { name: 'Ver histórico' }).click()
+  await page.getByRole('link', { name: /Desistência/ }).click()
+  await expect(page.getByRole('img', { name: 'Captura: peão preto' })).toBeVisible()
+  await expect(page.getByRole('img', { name: 'Captura: peão branco' })).toBeVisible()
+})
+
+test('confirma a saída por Escolher nível, Voltar e Nova partida', async ({ page }) => {
+  await page.goto('/difficulty')
+  await page.getByRole('link', { name: 'Básico' }).click()
+  await expect(square(page, 'e2')).toBeEnabled()
+
+  const exit = page.getByRole('dialog', { name: 'Sair da partida?' })
+  await page.getByRole('link', { name: /Escolher nível/ }).click()
+  await expect(exit).toBeVisible()
+  await exit.getByRole('button', { name: 'Continuar jogando' }).click()
+  await expect(exit).toBeHidden()
+  await expect(square(page, 'e2')).toBeEnabled()
+
+  await page.getByRole('button', { name: 'Nova partida' }).click()
+  const restart = page.getByRole('dialog', { name: 'Iniciar outra partida?' })
+  await expect(restart).toBeVisible()
+  await restart.getByRole('button', { name: 'Continuar jogando' }).click()
+  await expect(restart).toBeHidden()
+
+  await page.goBack()
+  await expect(exit).toBeVisible()
+  await exit.getByRole('button', { name: 'Encerrar e sair' }).click()
+  await expect(page.getByRole('heading', { name: 'Escolha o nível' })).toBeVisible()
+  await page.getByRole('link', { name: 'Meu perfil' }).click()
+  await expect(page.getByRole('link', { name: 'Retomar partida' })).toHaveCount(0)
+  await expect(page.getByRole('link', { name: /Desistência · Vitória · IA/ })).toBeVisible()
 })

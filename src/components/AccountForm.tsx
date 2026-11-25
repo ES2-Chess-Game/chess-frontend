@@ -44,7 +44,7 @@ export default function AccountForm({ onSignIn, continuingGame }: {
 
   return (
     <>
-      <h1>{register ? 'Criar conta' : 'Entrar no Clube 64'}</h1>
+      <h1>{register ? 'Criar conta' : 'Entrar no Skynet Chess'}</h1>
       {!register && continuingGame && <p className="muted">Entre ou crie uma conta para jogar.</p>}
       <form className="setup-form" onSubmit={event => void submit(event)}>
         <label className="setup-field">
