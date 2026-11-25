@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import AiIcon from '../components/AiIcon'
 import { gameApi, useGameCapabilities } from '../gameCapabilities'
-import { resumeGameUrl, type SavedGame } from '../savedGame'
+import { isFinished, resumeGameUrl, type SavedGame } from '../savedGame'
 
 const opening = [
   '♜♞♝♛♚♝♞♜',
@@ -45,7 +45,7 @@ export default function Home({ signedIn }: { signedIn: boolean }) {
       .then(async response => {
         if (!response.ok) return
         const game = await response.json() as SavedGame
-        if (!controller.signal.aborted) setResume(game)
+        if (!controller.signal.aborted) setResume(isFinished(game) ? null : game)
       })
       .catch(() => {})
     return () => controller.abort()
@@ -55,8 +55,8 @@ export default function Home({ signedIn }: { signedIn: boolean }) {
     <main id="conteudo" tabIndex={-1} className="page home">
       <div className="home-copy">
         <p className="eyebrow">Nova partida</p>
-        <h1>Acha que tem moral pra encarar o Arnold Schwarzenegger?</h1>
-        <p className="intro">Jogue com algum amigo ou desafie a IA do grupo 8 :)</p>
+        <h1>Acha que tem moral para enfrentar a <em>Skynet</em>?</h1>
+        <p className="intro">Enfrente a inteligência artificial ou jogue contra outra pessoa no mesmo tabuleiro.</p>
 
         <nav className="menu-options" aria-label="Modos de jogo">
           <Link className="mode-link mode-primary" to="/local">
@@ -66,7 +66,7 @@ export default function Home({ signedIn }: { signedIn: boolean }) {
           </Link>
           <Link className="mode-link mode-ai" to="/difficulty">
             <AiIcon />
-            <span><strong>Desafiar a IA</strong><small>Pratique com o Exterminador do Futuro</small></span>
+            <span><strong>Desafiar a IA</strong><small>Encare a Skynet em três níveis</small></span>
             <span className="mode-arrow" aria-hidden="true">↗</span>
           </Link>
           {canResume && (

@@ -6,7 +6,7 @@ import AvatarIcon from '../components/AvatarIcon'
 import GameHistoryList from '../components/GameHistoryList'
 import ProfileEditor from '../components/ProfileEditor'
 import { gameApi, useGameCapabilities } from '../gameCapabilities'
-import { resumeGameUrl, type SavedGame } from '../savedGame'
+import type { SavedGame } from '../savedGame'
 
 function AccountProfile({ account, onUpdate, onSignOut }: {
   account: Account
@@ -15,7 +15,6 @@ function AccountProfile({ account, onUpdate, onSignOut }: {
 }) {
   const capabilities = useGameCapabilities()
   const [profile, setProfile] = useState<Profile | null>(null)
-  const [active, setActive] = useState<SavedGame | null>(null)
   const [recent, setRecent] = useState<SavedGame[] | null>(null)
   const [gamesError, setGamesError] = useState(false)
   const [editing, setEditing] = useState(false)
@@ -32,17 +31,9 @@ function AccountProfile({ account, onUpdate, onSignOut }: {
         if (!signal.aborted) setAccountError(error instanceof Error ? error.message : 'Perfil indisponível')
       })
 
-    const current = apiRequest<SavedGame>(`${gameApi}/em-andamento`, { signal }).catch(error => {
-      if (error instanceof AccountRequestError && error.status === 404) return null
-      throw error
-    })
-    const history = apiRequest<SavedGame[]>(`${gameApi}/historico?resumo=true`, { signal })
-    void Promise.allSettled([current, history]).then(([currentResult, historyResult]) => {
-      if (signal.aborted) return
-      if (currentResult.status === 'fulfilled') setActive(currentResult.value)
-      if (historyResult.status === 'fulfilled') setRecent(historyResult.value.slice(0, 5))
-      setGamesError(currentResult.status === 'rejected' || historyResult.status === 'rejected')
-    })
+    void apiRequest<SavedGame[]>(`${gameApi}/historico?resumo=true`, { signal })
+      .then(history => { if (!signal.aborted) setRecent(history.slice(0, 5)) })
+      .catch(() => { if (!signal.aborted) setGamesError(true) })
 
     return () => controller.abort()
   }, [])
@@ -104,7 +95,6 @@ function AccountProfile({ account, onUpdate, onSignOut }: {
               </dl>
             </div>
           )}
-          {active && <Link className="back-link" to={resumeGameUrl(active)}>Retomar partida</Link>}
           {gamesError && <p className="error-message" role="alert">Não foi possível carregar todas as partidas</p>}
           {!gamesError && recent === null && <p className="muted" role="status">Carregando partidas</p>}
           {recent?.length === 0 && <p className="muted">Nenhuma partida encerrada ainda</p>}

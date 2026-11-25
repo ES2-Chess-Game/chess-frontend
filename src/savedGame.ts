@@ -2,6 +2,20 @@ import { type AiDifficulty } from './gameCapabilities'
 import type { ClockSetting } from './moveClock'
 
 export type PlayerColor = 'BRANCA' | 'PRETA'
+export type PieceType = 'PEAO' | 'TORRE' | 'CAVALO' | 'BISPO' | 'RAINHA' | 'REI'
+
+export const pieceSymbols: Record<PieceType, string> = {
+  REI: '♚', RAINHA: '♛', TORRE: '♜', BISPO: '♝', CAVALO: '♞', PEAO: '♟',
+}
+const pieceNames: Record<PieceType, string> = {
+  REI: 'rei', RAINHA: 'rainha', TORRE: 'torre', BISPO: 'bispo', CAVALO: 'cavalo', PEAO: 'peão',
+}
+
+export function pieceLabel(type: PieceType, color: PlayerColor) {
+  const feminine = type === 'RAINHA' || type === 'TORRE'
+  const name = color === 'BRANCA' ? 'branc' : 'pret'
+  return `${pieceNames[type]} ${name}${feminine ? 'a' : 'o'}`
+}
 export type SavedSettings = {
   modo: 'local' | 'ai'
   dificuldade?: AiDifficulty | null
@@ -12,9 +26,10 @@ export type SavedSettings = {
 export type SavedMove = {
   origem: { row: number; col: number }
   destino: { row: number; col: number }
-  peca: string
-  promocao?: string | null
-  captura?: string | null
+  cor?: PlayerColor
+  peca: PieceType
+  promocao?: PieceType | null
+  captura?: PieceType | null
 }
 export type SavedGame = {
   id: string
@@ -26,6 +41,17 @@ export type SavedGame = {
   encerradaEm?: number | null
   brancasMs?: number | null
   pretasMs?: number | null
+}
+
+export function capturedPiece(move: SavedMove, index: number) {
+  if (!move.captura) return null
+  const by = move.cor ?? (index % 2 === 0 ? 'BRANCA' : 'PRETA')
+  const color: PlayerColor = by === 'BRANCA' ? 'PRETA' : 'BRANCA'
+  return { type: move.captura, by, color }
+}
+
+export function isFinished(game: SavedGame) {
+  return game.status !== 'EM_ANDAMENTO' && game.status !== 'XEQUE'
 }
 
 export function savedMoveText(move: SavedMove) {

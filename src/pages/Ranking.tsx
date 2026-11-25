@@ -29,7 +29,7 @@ export default function Ranking({ currentUser }: { currentUser?: string }) {
   return (
     <main id="conteudo" tabIndex={-1} className="page account-page ranking-page">
       <Link to="/" className="back-link">← Modos de jogo</Link>
-      <h1>Ranking do Clube 64</h1>
+      <h1>Ranking do Skynet Chess</h1>
       <p className="muted" id="ranking-regras">
         Contra a IA, cada vitória por xeque-mate vale 3 pontos e cada empate vale 1. Em caso de empate em pontos,
         valem primeiro as vitórias por xeque-mate e depois a ordem alfabética.
