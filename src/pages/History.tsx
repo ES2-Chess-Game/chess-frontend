@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { gameApi } from '../gameCapabilities'
-import { gameDate, gameResult, savedMoveText, type SavedGame } from '../savedGame'
+import { gameDate, gameResult, type SavedGame } from '../savedGame'
 import GameHistoryList from '../components/GameHistoryList'
+import MoveList from '../components/MoveList'
 
 function HistoryContent() {
   const { id } = useParams()
@@ -40,7 +41,7 @@ function HistoryContent() {
             {game.encerradaEm && <p className="muted">{gameDate.format(game.encerradaEm)}</p>}
           </div>
           {game.lances?.length
-            ? <ol className="move-list">{game.lances.map((move, index) => <li key={index}>{savedMoveText(move)}</li>)}</ol>
+            ? <MoveList moves={game.lances} />
             : <p className="muted">Nenhum lance registrado</p>}
         </section>
       )}
