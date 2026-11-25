@@ -31,8 +31,8 @@ export default function Ranking({ currentUser }: { currentUser?: string }) {
       <Link to="/" className="back-link">← Modos de jogo</Link>
       <h1>Ranking do Skynet Chess</h1>
       <p className="muted" id="ranking-regras">
-        Contra a IA, cada vitória por xeque-mate vale 3 pontos e cada empate vale 1. Em caso de empate em pontos,
-        valem primeiro as vitórias por xeque-mate e depois a ordem alfabética.
+        Contra a IA, cada vitória por xeque-mate vale 3 pontos e cada empate vale 1. Quem tem menos derrotas leva
+        vantagem no empate em pontos
       </p>
       {result === 'loading' && <p role="status" className="muted">Carregando ranking</p>}
       {result === 'error' && (
