@@ -2,6 +2,20 @@ import { type AiDifficulty } from './gameCapabilities'
 import type { ClockSetting } from './moveClock'
 
 export type PlayerColor = 'BRANCA' | 'PRETA'
+export type PieceType = 'PEAO' | 'TORRE' | 'CAVALO' | 'BISPO' | 'RAINHA' | 'REI'
+
+export const pieceSymbols: Record<PieceType, string> = {
+  REI: '♚', RAINHA: '♛', TORRE: '♜', BISPO: '♝', CAVALO: '♞', PEAO: '♟',
+}
+const pieceNames: Record<PieceType, string> = {
+  REI: 'rei', RAINHA: 'rainha', TORRE: 'torre', BISPO: 'bispo', CAVALO: 'cavalo', PEAO: 'peão',
+}
+
+export function pieceLabel(type: PieceType, color: PlayerColor) {
+  const feminine = type === 'RAINHA' || type === 'TORRE'
+  const name = color === 'BRANCA' ? 'branc' : 'pret'
+  return `${pieceNames[type]} ${name}${feminine ? 'a' : 'o'}`
+}
 export type SavedSettings = {
   modo: 'local' | 'ai'
   dificuldade?: AiDifficulty | null
@@ -12,11 +26,14 @@ export type SavedSettings = {
 export type SavedMove = {
   origem: { row: number; col: number }
   destino: { row: number; col: number }
-  peca: string
-  promocao?: string | null
-  captura?: string | null
+  cor?: PlayerColor
+  peca: PieceType
+  promocao?: PieceType | null
+  captura?: PieceType | null
 }
+export type BoardPiece = { tipo: PieceType; cor: PlayerColor }
 export type SavedGame = {
+  tabuleiro?: (BoardPiece | null)[][]
   id: string
   status: string
   vencedor?: PlayerColor | null
@@ -26,6 +43,17 @@ export type SavedGame = {
   encerradaEm?: number | null
   brancasMs?: number | null
   pretasMs?: number | null
+}
+
+export function capturedPiece(move: SavedMove, index: number) {
+  if (!move.captura) return null
+  const by = move.cor ?? (index % 2 === 0 ? 'BRANCA' : 'PRETA')
+  const color: PlayerColor = by === 'BRANCA' ? 'PRETA' : 'BRANCA'
+  return { type: move.captura, by, color }
+}
+
+export function isFinished(game: SavedGame) {
+  return game.status !== 'EM_ANDAMENTO' && game.status !== 'XEQUE'
 }
 
 export function savedMoveText(move: SavedMove) {
@@ -56,9 +84,20 @@ const gameStatuses: Record<string, string> = {
 }
 export const gameDate = new Intl.DateTimeFormat('pt-BR', { dateStyle: 'short', timeStyle: 'short' })
 
+export function historyGameUrl(id: string) {
+  return `/historico/${encodeURIComponent(id)}`
+}
+
+export function gameStatusText(game: SavedGame) {
+  return gameStatuses[game.status] ?? 'Partida encerrada'
+}
+
+export function gamePlayerName(game: SavedGame, color: PlayerColor) {
+  if (color === 'BRANCA') return game.configuracao?.brancas || 'Brancas'
+  return game.configuracao?.pretas || (game.configuracao?.modo === 'ai' ? 'Skynet' : 'Pretas')
+}
+
 export function gameResult(game: SavedGame) {
-  const winner = game.vencedor === 'BRANCA'
-    ? game.configuracao?.brancas || 'Brancas'
-    : game.configuracao?.pretas || (game.configuracao?.modo === 'ai' ? 'IA' : 'Pretas')
-  return [gameStatuses[game.status], game.vencedor && `Vitória · ${winner}`].filter(Boolean).join(' · ')
+  const result = game.vencedor ? `Vitória · ${gamePlayerName(game, game.vencedor)}` : undefined
+  return [gameStatusText(game), result].filter(Boolean).join(' · ')
 }

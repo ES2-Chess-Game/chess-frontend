@@ -13,7 +13,7 @@ async function move(page: Page, from: string, to: string) {
   await square(page, to).click()
 }
 
-test('partida local chega ao xeque-mate e bloqueia outros lances', async ({ page }) => {
+test('partida local abre seu histórico ao chegar ao xeque-mate', async ({ page }) => {
   await page.goto('/')
   await page.getByRole('link', { name: 'Jogar localmente' }).click()
   await page.getByRole('button', { name: 'Começar partida' }).click()
@@ -28,9 +28,12 @@ test('partida local chega ao xeque-mate e bloqueia outros lances', async ({ page
   await move(page, 'g2', 'g4')
   await expect(status).toHaveText('Vez das pretas')
   await move(page, 'd8', 'h4')
-  await expect(status).toContainText('Xeque-mate · Pretas vencem')
-  await expect(square(page, 'b1')).toBeDisabled()
-  await expect(page.getByRole('listitem')).toHaveCount(4)
+  await expect(page).toHaveURL(/\/historico\/[^/]+$/)
+  await expect(page.getByRole('region', { name: 'Resultado' })).toContainText('Xeque-mate')
+  await expect(page.getByRole('heading', { name: 'Vitória de Pretas' })).toBeVisible()
+  await expect(page.getByRole('img', { name: 'Tabuleiro com a posição final' })).toBeVisible()
+  await expect(page.getByRole('region', { name: 'Lances da partida' }).getByRole('listitem')).toHaveCount(4)
+  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(page.viewportSize()!.width)
 })
 
 test('escolhe o nível básico e recebe um lance da máquina', async ({ page }) => {
@@ -52,7 +55,9 @@ test('escolhe o nível básico e recebe um lance da máquina', async ({ page }) 
   await expect(dialog).toContainText('Quem desiste: Brancas')
   await expect(dialog.locator('strong')).toHaveText('Brancas')
   await dialog.getByRole('button', { name: 'Desistir', exact: true }).click()
-  await expect(page.getByRole('status')).toHaveText('Desistência · A IA vence')
+  await expect(page).toHaveURL(/\/historico\/[^/]+$/)
+  await expect(page.getByRole('region', { name: 'Resultado' })).toContainText('Desistência')
+  await expect(page.getByRole('heading', { name: 'Vitória de Skynet' })).toBeVisible()
 })
 
 test('lance ilegal mantém o tabuleiro e permite tentar novamente', async ({ page }) => {
@@ -121,12 +126,13 @@ test('atribui as cores aos jogadores e encerra a partida por desistência', asyn
   await resign.click()
   await dialog.getByRole('button', { name: 'Desistir', exact: true }).click()
   await expect(dialog).toBeHidden()
-  await expect(status).toHaveText('Desistência · Rui vence')
-  await expect(square(page, 'e7')).toBeDisabled()
+  await expect(page).toHaveURL(/\/historico\/[^/]+$/)
+  const result = page.getByRole('region', { name: 'Resultado' })
+  await expect(result.getByRole('heading', { name: 'Vitória de Rui' })).toBeVisible()
+  await expect(result.getByText('Lia', { exact: true })).toBeVisible()
 
-  await actions.getByRole('button', { name: 'Nova partida' }).click()
-  await expect(status).toHaveText('Vez de Rui · Brancas')
-  await expect(square(page, 'e2')).toBeEnabled()
+  await page.getByRole('link', { name: 'Nova partida' }).click()
+  await expect(page.getByRole('heading', { name: 'Partida local' })).toBeVisible()
 })
 
 test('reinicia o cronômetro após lance válido e encerra a partida no fim do tempo', async ({ page }) => {
@@ -156,6 +162,15 @@ test('reinicia o cronômetro após lance válido e encerra a partida no fim do t
   await expect(timer).toHaveText('0 s')
   await expect(status).toHaveText('Tempo esgotado · Brancas vencem')
   await expect(square(page, 'e7')).toBeDisabled()
+})
+
+test('abre o histórico quando o servidor confirma o fim do tempo', async ({ page }) => {
+  test.setTimeout(35_000)
+  await page.goto('/game?time=15')
+  await expect(page.getByRole('timer')).toBeVisible()
+  await expect(page).toHaveURL(/\/historico\/[^/]+$/, { timeout: 20_000 })
+  await expect(page.getByRole('region', { name: 'Resultado' })).toContainText('Tempo esgotado')
+  await expect(page.getByRole('heading', { name: 'Vitória de Pretas' })).toBeVisible()
 })
 
 test('escolhe a peça da promoção e registra o lance', async ({ page }) => {
@@ -249,6 +264,7 @@ test.describe('partidas persistentes', () => {
     await move(page, 'e2', 'e4')
     await expect(page.getByRole('status')).toHaveText('Vez de Rui · Pretas')
 
+    page.once('dialog', dialog => { void dialog.accept() })
     await page.goto('/')
     await page.getByRole('link', { name: 'Retomar partida' }).click()
     await expect(page.getByRole('status')).toHaveText('Vez de Rui · Pretas')
@@ -258,10 +274,12 @@ test.describe('partidas persistentes', () => {
 
     await page.getByRole('button', { name: 'Desistir da partida' }).click()
     await page.getByRole('dialog').getByRole('button', { name: 'Desistir', exact: true }).click()
-    await expect(page.getByRole('status')).toHaveText('Desistência · Lia vence')
-    await page.goto('/')
-    await page.getByRole('link', { name: 'Ver histórico' }).click()
+    await expect(page).toHaveURL(/\/historico\/[^/]+$/)
+    await expect(page.getByRole('heading', { name: 'Vitória de Lia' })).toBeVisible()
+    const matchUrl = page.url()
+    await page.getByRole('link', { name: '← Histórico' }).click()
     await page.getByRole('link', { name: /Desistência · Vitória · Lia/ }).click()
+    await expect(page).toHaveURL(matchUrl)
     await expect(page.getByRole('listitem')).toHaveText('e2 → e4')
 
     const other = await browser.newContext()
@@ -274,4 +292,58 @@ test.describe('partidas persistentes', () => {
       await other.close()
     }
   })
+})
+
+test('mostra as capturas dos dois lados no tabuleiro, nos lances e no histórico', async ({ page }) => {
+  await page.goto('/game')
+  const board = page.getByRole('group', { name: 'Tabuleiro de xadrez' })
+  await expect(square(page, 'e2')).toBeEnabled()
+  const width = (await board.boundingBox())!.width
+  expect(width).toBeGreaterThan(Math.min(700, page.viewportSize()!.width - 40))
+
+  for (const [from, to] of [['e2', 'e4'], ['d7', 'd5'], ['e4', 'd5'], ['d8', 'd5']]) {
+    await move(page, from, to)
+  }
+  await expect(page.getByRole('group', { name: 'Capturas das brancas' })
+    .getByRole('img', { name: 'peão preto' })).toBeVisible()
+  await expect(page.getByRole('group', { name: 'Capturas das pretas' })
+    .getByRole('img', { name: 'peão branco' })).toBeVisible()
+  await expect(page.getByRole('listitem').nth(2)
+    .getByRole('img', { name: 'Captura: peão preto' })).toBeVisible()
+  await expect(page.getByRole('listitem').nth(3)
+    .getByRole('img', { name: 'Captura: peão branco' })).toBeVisible()
+
+  await page.getByRole('button', { name: 'Desistir da partida' }).click()
+  await page.getByRole('dialog').getByRole('button', { name: 'Desistir', exact: true }).click()
+  await expect(page).toHaveURL(/\/historico\/[^/]+$/)
+  await expect(page.getByRole('region', { name: 'Resultado' })).toContainText('Desistência')
+  await expect(page.getByRole('img', { name: 'Captura: peão preto' })).toBeVisible()
+  await expect(page.getByRole('img', { name: 'Captura: peão branco' })).toBeVisible()
+})
+
+test('confirma a saída por Escolher nível, Voltar e Nova partida', async ({ page }) => {
+  await page.goto('/difficulty')
+  await page.getByRole('link', { name: 'Básico' }).click()
+  await expect(square(page, 'e2')).toBeEnabled()
+
+  const exit = page.getByRole('dialog', { name: 'Sair da partida?' })
+  await page.getByRole('link', { name: /Escolher nível/ }).click()
+  await expect(exit).toBeVisible()
+  await exit.getByRole('button', { name: 'Continuar jogando' }).click()
+  await expect(exit).toBeHidden()
+  await expect(square(page, 'e2')).toBeEnabled()
+
+  await page.getByRole('button', { name: 'Nova partida' }).click()
+  const restart = page.getByRole('dialog', { name: 'Iniciar outra partida?' })
+  await expect(restart).toBeVisible()
+  await restart.getByRole('button', { name: 'Continuar jogando' }).click()
+  await expect(restart).toBeHidden()
+
+  await page.goBack()
+  await expect(exit).toBeVisible()
+  await exit.getByRole('button', { name: 'Encerrar e sair' }).click()
+  await expect(page.getByRole('heading', { name: 'Escolha o nível' })).toBeVisible()
+  await page.getByRole('link', { name: 'Meu perfil' }).click()
+  await expect(page.getByRole('link', { name: 'Retomar partida' })).toHaveCount(0)
+  await expect(page.getByRole('link', { name: /Desistência · Vitória · Skynet/ })).toBeVisible()
 })

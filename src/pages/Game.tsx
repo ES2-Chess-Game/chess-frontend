@@ -1,15 +1,19 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { KeyboardEvent } from 'react'
-import { Link, useLocation, useNavigate, useSearchParams } from 'react-router-dom'
+import { Link, useBlocker, useLocation, useNavigate, useSearchParams } from 'react-router-dom'
 import AiIcon from '../components/AiIcon'
+import CapturedPieces from '../components/CapturedPieces'
+import MoveList from '../components/MoveList'
 import { gameApi, readAiDifficulty, useGameCapabilities } from '../gameCapabilities'
 import { clockDuration, formatClock, readClockSetting } from '../moveClock'
-import { savedMoveText, type SavedGame } from '../savedGame'
+import {
+  historyGameUrl, isFinished, pieceLabel, pieceSymbols as symbols, type BoardPiece,
+  type PieceType, type PlayerColor as Color,
+  type SavedGame, type SavedMove,
+} from '../savedGame'
 
-type Color = 'BRANCA' | 'PRETA'
-type PieceType = 'PEAO' | 'TORRE' | 'CAVALO' | 'BISPO' | 'RAINHA' | 'REI'
 type GameStatus = 'EM_ANDAMENTO' | 'XEQUE' | 'XEQUE_MATE' | 'EMPATE' | 'TEMPO_ESGOTADO' | 'DESISTENCIA'
-type Piece = { tipo: PieceType; cor: Color }
+type Piece = BoardPiece
 type Board = (Piece | null)[][]
 type Game = SavedGame & { tabuleiro: Board; turnoAtual: Color; status: GameStatus }
 type Square = [number, number]
@@ -20,16 +24,9 @@ type MatchEnd = { reason: 'Desistência' | 'Tempo esgotado'; loser: Color }
 type TurnClock = { deadline: number; color: Color }
 
 const files = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h']
-const symbols: Record<PieceType, string> = {
-  REI: '♚', RAINHA: '♛', TORRE: '♜', BISPO: '♝', CAVALO: '♞', PEAO: '♟',
-}
-const pieceNames: Record<PieceType, string> = {
-  REI: 'rei', RAINHA: 'rainha', TORRE: 'torre', BISPO: 'bispo', CAVALO: 'cavalo', PEAO: 'peão',
-}
 const rows = [8, 7, 6, 5, 4, 3, 2, 1]
 const colorLabels: Record<Color, string> = { BRANCA: 'Brancas', PRETA: 'Pretas' }
 const promotions: Record<Promotion, string> = { RAINHA: 'Dama', TORRE: 'Torre', BISPO: 'Bispo', CAVALO: 'Cavalo' }
-const promotionNotation: Record<Promotion, string> = { RAINHA: 'D', TORRE: 'T', BISPO: 'B', CAVALO: 'C' }
 
 function displaySeconds(ms: number) {
   return Math.max(0, Math.ceil(ms / 1000))
@@ -39,16 +36,8 @@ function isPromotion(piece: PieceType | undefined): piece is Promotion {
   return piece !== undefined && Object.hasOwn(promotions, piece)
 }
 
-function isFinished(game: Game) {
-  return game.status !== 'EM_ANDAMENTO' && game.status !== 'XEQUE'
-}
-
 function squareLabel(row: number, col: number, piece: Piece | null) {
-  const square = `${files[col]}${8 - row}`
-  if (!piece) return `${square}, vazia`
-  const female = piece.tipo === 'RAINHA' || piece.tipo === 'TORRE'
-  const color = piece.cor === 'BRANCA' ? (female ? 'branca' : 'branco') : (female ? 'preta' : 'preto')
-  return `${square}, ${pieceNames[piece.tipo]} ${color}`
+  return `${files[col]}${8 - row}, ${piece ? pieceLabel(piece.tipo, piece.cor) : 'vazia'}`
 }
 
 async function readGame(response: Response): Promise<Game> {
@@ -71,19 +60,22 @@ async function readGame(response: Response): Promise<Game> {
   return data as Game
 }
 
-function describeMove(before: Board, after: Board, { from, to }: Move) {
-  const [fromRow, fromCol] = from
-  const [toRow, toCol] = to
-  const piece = before[fromRow][fromCol]
-  if (piece?.tipo === 'REI' && fromRow === toRow && Math.abs(fromCol - toCol) === 2) {
-    return toCol > fromCol ? 'O-O' : 'O-O-O'
-  }
+function describeMove(before: Board, after: Board, { from, to }: Move): SavedMove | undefined {
+  const [row, col] = from
+  const [targetRow, targetCol] = to
+  const piece = before[row][col]
+  if (!piece) return undefined
 
-  const promoted = after[toRow][toCol]?.tipo
-  const promotion = piece?.tipo === 'PEAO' && isPromotion(promoted) ? `=${promotionNotation[promoted]}` : ''
-  const enPassant = piece?.tipo === 'PEAO' && fromCol !== toCol && before[toRow][toCol] === null
-  const capture = before[toRow][toCol] !== null || enPassant ? ' ×' : ''
-  return `${files[fromCol]}${8 - fromRow} → ${files[toCol]}${8 - toRow}${capture}${promotion}`
+  const target = before[targetRow][targetCol]
+  const enPassant = piece.tipo === 'PEAO' && col !== targetCol && target === null
+  const captured = enPassant ? before[row][targetCol] : target
+  const promoted = after[targetRow][targetCol]?.tipo
+
+  return {
+    origem: { row, col }, destino: { row: targetRow, col: targetCol }, cor: piece.cor, peca: piece.tipo,
+    promocao: piece.tipo === 'PEAO' && isPromotion(promoted) ? promoted : null,
+    captura: captured?.tipo ?? null,
+  }
 }
 
 function findMove(before: Board, after: Board, color: Color): Move | null {
@@ -137,20 +129,31 @@ function Match() {
   const promotionDialog = useRef<HTMLDialogElement>(null)
   const [focused, setFocused] = useState(52)
   const squares = useRef<(HTMLButtonElement | null)[]>([])
-  const [moves, setMoves] = useState<string[]>([])
+  const [moves, setMoves] = useState<SavedMove[]>([])
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
   const [aiThinking, setAiThinking] = useState(false)
   const [matchEnd, setMatchEnd] = useState<MatchEnd | null>(null)
   const [resigning, setResigning] = useState<Color | null>(null)
   const resignationDialog = useRef<HTMLDialogElement>(null)
+  const departureDialog = useRef<HTMLDialogElement>(null)
+  const [restartRequested, setRestartRequested] = useState(false)
+  const [ending, setEnding] = useState(false)
+  const allowNavigation = useRef(false)
   const [secondsLeft, setSecondsLeft] = useState<number | null>(null)
   const clock = useRef<TurnClock | null>(null)
   const matchTime = useRef<MatchTime>({ BRANCA: duration, PRETA: duration })
   const [matchSeconds, setMatchSeconds] = useState<MatchTime | null>(null)
   const requests = useRef<AbortController | null>(null)
 
-  const beginTurn = useCallback((nextGame: Game) => {
+  const beginTurn = useCallback((nextGame: Game, fallback?: SavedMove, openResult = true) => {
+    if (openResult && isFinished(nextGame) && nextGame.encerradaEm != null) {
+      allowNavigation.current = true
+      void navigate(historyGameUrl(nextGame.id), { replace: true })
+      return
+    }
+    if (nextGame.lances) setMoves(nextGame.lances)
+    else if (fallback) setMoves(current => [...current, fallback])
     const now = Date.now()
     const previous = clock.current
     if (matchClock && previous) {
@@ -170,7 +173,7 @@ function Match() {
     } : null)
     setSecondsLeft(timed && !matchClock ? displaySeconds(budget) : null)
     setGame(nextGame)
-  }, [duration, matchClock])
+  }, [duration, matchClock, navigate])
 
   const finishMatch = useCallback((end: MatchEnd) => {
     requests.current?.abort()
@@ -201,11 +204,20 @@ function Match() {
 
     finishMatch({ reason: 'Tempo esgotado', loser: turnClock.color })
     if (game?.configuracao) {
-      // A consulta encerra o jogo também no servidor quando o relógio realmente zera
-      void fetch(`${gameApi}/${game.id}`).catch(() => {})
+      const controller = new AbortController()
+      requests.current = controller
+      const { signal } = controller
+      void fetch(`${gameApi}/${game.id}`, { signal })
+        .then(readGame)
+        .then(confirmed => {
+          if (!signal.aborted && isFinished(confirmed)) beginTurn(confirmed)
+        })
+        .catch(() => {
+          if (!signal.aborted) setError('Não foi possível confirmar o resultado com o servidor')
+        })
     }
     return true
-  }, [finishMatch, game])
+  }, [beginTurn, finishMatch, game])
 
   useEffect(() => {
     if (!duration) return
@@ -259,10 +271,7 @@ function Match() {
           }),
         })
       const nextGame = await readGame(response)
-      if (!signal.aborted) {
-        setMoves(nextGame.lances?.map(savedMoveText) ?? [])
-        beginTurn(nextGame)
-      }
+      if (!signal.aborted) beginTurn(nextGame)
     } catch (requestError) {
       if (!signal.aborted) setError(requestError instanceof Error ? requestError.message : 'Servidor indisponível')
     } finally {
@@ -317,8 +326,7 @@ function Match() {
       if (signal.aborted || expireTurn()) return
 
       const aiMove = findMove(currentGame.tabuleiro, updatedGame.tabuleiro, 'PRETA')
-      beginTurn(updatedGame)
-      if (aiMove) setMoves((current) => [...current, describeMove(currentGame.tabuleiro, updatedGame.tabuleiro, aiMove)])
+      beginTurn(updatedGame, aiMove ? describeMove(currentGame.tabuleiro, updatedGame.tabuleiro, aiMove) : undefined)
     } catch (requestError) {
       if (!signal.aborted) setError(requestError instanceof Error ? requestError.message : 'Não foi possível obter o lance da IA')
     } finally {
@@ -352,8 +360,7 @@ function Match() {
       const updatedGame = await readGame(response)
       if (signal.aborted || expireTurn()) return
 
-      beginTurn(updatedGame)
-      setMoves((current) => [...current, describeMove(game.tabuleiro, updatedGame.tabuleiro, { from, to })])
+      beginTurn(updatedGame, describeMove(game.tabuleiro, updatedGame.tabuleiro, { from, to }))
       if (isAiGame && !isFinished(updatedGame) && updatedGame.turnoAtual === 'PRETA') {
         await playAiMove(updatedGame)
       }
@@ -365,8 +372,28 @@ function Match() {
   }
 
   const gameOver = matchEnd !== null || (game !== null && isFinished(game))
+  const protectActiveMatch = game !== null && !gameOver
+  const blocker = useBlocker(() => protectActiveMatch && !allowNavigation.current)
+  const departureOpen = restartRequested || blocker.state === 'blocked'
+
+  useEffect(() => {
+    const dialog = departureDialog.current
+    if (departureOpen && !dialog?.open) dialog?.showModal()
+    if (!departureOpen && dialog?.open) dialog.close()
+  }, [departureOpen])
+
+  useEffect(() => {
+    if (!protectActiveMatch) return
+    function warnBeforeUnload(event: BeforeUnloadEvent) {
+      event.preventDefault()
+      event.returnValue = ''
+    }
+    window.addEventListener('beforeunload', warnBeforeUnload)
+    return () => window.removeEventListener('beforeunload', warnBeforeUnload)
+  }, [protectActiveMatch])
+
   const aiTurnPending = !!game && !gameOver && isAiGame && game.turnoAtual === 'PRETA'
-  const blocked = loading || gameOver || aiTurnPending || resigning !== null || promotion !== null
+  const blocked = loading || ending || gameOver || aiTurnPending || resigning !== null || promotion !== null
   const turn = game?.turnoAtual ?? 'BRANCA'
   const playerLabel = (color: Color) => players[color] ? `${players[color]} · ${colorLabels[color]}` : colorLabels[color]
   const resigningPlayer = resigning && players[resigning]
@@ -403,32 +430,55 @@ function Match() {
     }
     const params = new URLSearchParams(searchParams)
     params.delete('resume')
+    allowNavigation.current = true
     void navigate(`/game?${params}`, { replace: true, state: { players } })
   }
 
-  async function resign() {
-    if (!game || !resigning || expireTurn()) return
+  async function endByResignation(loser: Color, openResult: boolean) {
+    if (!game || gameOver || expireTurn()) return true
     if (!game.configuracao) {
-      finishMatch({ reason: 'Desistência', loser: resigning })
-      return
+      finishMatch({ reason: 'Desistência', loser })
+      return true
     }
     const signal = requests.current?.signal
-    if (!signal || signal.aborted) return
+    if (!signal || signal.aborted) return false
+
+    setEnding(true)
+    setError('')
     try {
-      setError('')
-      const response = await fetch(`${gameApi}/${game.id}/desistencia?cor=${resigning}`, { method: 'POST', signal })
+      const response = await fetch(`${gameApi}/${game.id}/desistencia?cor=${loser}`, { method: 'POST', signal })
       const finished = await readGame(response)
-      if (signal.aborted) return
-      beginTurn(finished)
-      resignationDialog.current?.close()
-      setResigning(null)
+      if (signal.aborted) return false
+      beginTurn(finished, undefined, openResult)
       setSelected(null)
+      return true
     } catch (requestError) {
       if (!signal.aborted) {
-        resignationDialog.current?.close()
         setError(requestError instanceof Error ? requestError.message : 'Não foi possível encerrar a partida')
       }
+      return false
+    } finally {
+      setEnding(false)
     }
+  }
+
+  async function resign() {
+    if (!resigning || ending) return
+    await endByResignation(resigning, true)
+    resignationDialog.current?.close()
+  }
+
+  function cancelDeparture() {
+    if (ending) return
+    setRestartRequested(false)
+    if (blocker.state === 'blocked') blocker.reset()
+  }
+
+  async function confirmDeparture() {
+    if (ending || !await endByResignation(isAiGame ? 'BRANCA' : turn, false)) return
+    setRestartRequested(false)
+    if (blocker.state === 'blocked') blocker.proceed()
+    else if (restartRequested) restart()
   }
 
   function play(row: number, col: number) {
@@ -483,13 +533,18 @@ function Match() {
           </h1>
         </div>
         <div className="game-header-actions" role="group" aria-label="Ações da partida">
-          <button className="button-secondary" onClick={restart} disabled={loading || !levelAvailable}>
+          <button className="button-secondary" onClick={() => {
+            if (protectActiveMatch) {
+              setError('')
+              setRestartRequested(true)
+            } else restart()
+          }} disabled={loading || ending || !levelAvailable}>
             Nova partida
           </button>
           <button
             className="button-secondary button-danger"
             aria-haspopup="dialog"
-            disabled={!game || gameOver}
+            disabled={!game || gameOver || ending}
             onClick={() => {
               if (expireTurn()) return
               setResigning(isAiGame ? 'BRANCA' : turn)
@@ -503,7 +558,7 @@ function Match() {
 
       <div className="game-layout">
         <section className="play-area" aria-label="Partida de xadrez">
-          <div className="turn-bar">
+          <div className={`turn-bar${gameOver ? ' turn-ended' : ''}`}>
             <p className="turn-status" role="status">
               {!gameOver && <span className={`turn-dot ${turn === 'PRETA' ? 'turn-black' : ''}`} aria-hidden="true" />}
               {status}
@@ -529,6 +584,7 @@ function Match() {
             )}
           </div>
 
+          <CapturedPieces by="PRETA" moves={moves} />
           <div className="board-frame">
             <div className="board-wrap">
               <div className="rank-labels" aria-hidden="true">
@@ -568,7 +624,8 @@ function Match() {
             <div className="file-labels" aria-hidden="true">{files.map(file => <span key={file}>{file}</span>)}</div>
           </div>
 
-          {error && <p className="error-message" role="alert">{error}</p>}
+          <CapturedPieces by="BRANCA" moves={moves} />
+          {error && !departureOpen && <p className="error-message" role="alert">{error}</p>}
           {aiTurnPending && !loading && !resigning && (
             <button className="button-secondary game-retry" onClick={() => void playAiMove(game)}>
               Tentar resposta da IA
@@ -580,7 +637,7 @@ function Match() {
           <section>
             <div className="detail-heading"><h2>Lances</h2><span>{moves.length}</span></div>
             {moves.length > 0
-              ? <ol className="move-list">{moves.map((move, index) => <li key={index}>{move}</li>)}</ol>
+              ? <MoveList moves={moves} />
               : <p className="muted">Nenhum lance ainda</p>}
           </section>
         </aside>
@@ -614,6 +671,7 @@ function Match() {
         aria-labelledby="resignation-title"
         aria-describedby="resignation-player"
         onClose={() => setResigning(null)}
+        onCancel={event => { if (ending) event.preventDefault() }}
       >
         <h2 id="resignation-title">Confirmar desistência</h2>
         <p id="resignation-player" className="muted">
@@ -626,11 +684,29 @@ function Match() {
           )}
         </p>
         <div className="action-buttons">
-          <button className="button-secondary" onClick={() => resignationDialog.current?.close()}>
+          <button className="button-secondary" onClick={() => resignationDialog.current?.close()} disabled={ending}>
             Continuar jogando
           </button>
-          <button className="button-secondary button-danger" onClick={() => void resign()}>
+          <button className="button-secondary button-danger" onClick={() => void resign()} disabled={ending}>
             Desistir
+          </button>
+        </div>
+      </dialog>
+
+      <dialog ref={departureDialog} className="game-dialog" aria-labelledby="departure-title"
+        aria-describedby="departure-description" onCancel={event => {
+          event.preventDefault()
+          cancelDeparture()
+        }}>
+        <h2 id="departure-title">{restartRequested ? 'Iniciar outra partida?' : 'Sair da partida?'}</h2>
+        <p className="muted" id="departure-description">
+          {gameOver ? 'O resultado da partida já foi registrado.' : 'A partida atual será encerrada por desistência.'}
+        </p>
+        {error && departureOpen && <p className="error-message" role="alert">{error}</p>}
+        <div className="action-buttons">
+          <button className="button-secondary" onClick={cancelDeparture} disabled={ending}>Continuar jogando</button>
+          <button className="button-secondary button-danger" onClick={() => void confirmDeparture()} disabled={ending}>
+            {ending ? 'Encerrando…' : restartRequested ? 'Encerrar e iniciar outra' : 'Encerrar e sair'}
           </button>
         </div>
       </dialog>

@@ -1,8 +1,9 @@
 :root {
   font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
-  color: #253630;
-  background: #f5f3eb;
-  color-scheme: light;
+  color: #f7eff1;
+  background: #100e11;
+  background-image: radial-gradient(ellipse at 75% 0%, #32151c 0, transparent 52rem);
+  color-scheme: dark;
   font-synthesis: none;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
